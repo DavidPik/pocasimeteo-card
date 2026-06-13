@@ -1,0 +1,1 @@
+# minified pocasi meteo card
