@@ -4,5 +4,7 @@
   "filename": "pocasimeteo-card.js",
   "country": ["CZ"],
   "homeassistant": "2025.12.0",
-  "render_readme": true
+  "render_readme": true,
+  "domains": ["lovelace"],
+  "ipt_class": "local_polling"
 }
