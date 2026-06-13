@@ -93,3 +93,10 @@ class PocasiMeteoCard extends HTMLElement {
 }
 
 customElements.define("pocasimeteo-card", PocasiMeteoCard);
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "pocasimeteo-card",
+  name: "PočasíMeteo Card",
+  description: "Lovelace card for PočasíMeteo.cz weather data"
+});
