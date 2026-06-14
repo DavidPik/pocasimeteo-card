@@ -27,7 +27,7 @@ class PocasiMeteoCard extends HTMLElement {
   constructor() {
     super();
     this._initialized = false;
-    this._updateScheduled = false;
+    this._rendering = false;
     this._charts = {};
   }
 
@@ -43,13 +43,12 @@ class PocasiMeteoCard extends HTMLElement {
       this._initialized = true;
     }
 
-    if (this._updateScheduled) return;
+    if (this._rendering) return;
 
-    this._updateScheduled = true;
-    setTimeout(() => {
-      this._update(hass);
-      this._updateScheduled = false;
-    }, 1000);
+    this._rendering = true;
+    this._update(hass).finally(() => {
+      this._rendering = false;
+    });
   }
 
   _initialize() {
@@ -62,20 +61,43 @@ class PocasiMeteoCard extends HTMLElement {
           flex-direction: column;
           gap: 16px;
         }
+
         .pm-header {
           display: flex;
           justify-content: space-between;
           font-size: 20px;
           font-weight: 600;
         }
+
         .pm-condition {
           opacity: 0.7;
           font-size: 14px;
         }
+
         .pm-temp {
           font-size: 64px;
           font-weight: 300;
         }
+
+        .pm-current {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 16px;
+          opacity: 0.8;
+          font-size: 16px;
+        }
+
+        .pm-graphs {
+          display: grid;
+          gap: 16px;
+        }
+
+        @media (min-width: 900px) {
+          .pm-graphs {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
         .pm-graph {
           width: 100%;
           height: 200px;
@@ -85,7 +107,8 @@ class PocasiMeteoCard extends HTMLElement {
       <ha-card class="pm-card">
         <div id="header"></div>
         <div id="temp"></div>
-        <div id="graphs"></div>
+        <div id="current"></div>
+        <div id="graphs" class="pm-graphs"></div>
       </ha-card>
     `;
   }
@@ -106,6 +129,7 @@ class PocasiMeteoCard extends HTMLElement {
 
     const header = this.shadowRoot.getElementById("header");
     const temp = this.shadowRoot.getElementById("temp");
+    const current = this.shadowRoot.getElementById("current");
     const graphs = this.shadowRoot.getElementById("graphs");
 
     header.innerHTML = `
@@ -119,6 +143,14 @@ class PocasiMeteoCard extends HTMLElement {
     `;
 
     temp.innerHTML = `<div class="pm-temp">${d.TeplotaVnejsi}°</div>`;
+
+    current.innerHTML = `
+      <div>Vlhkost: ${d.VlhkostVnejsi}%</div>
+      <div>Tlak: ${d.TlakRel || d.Tlak || ""} hPa</div>
+      <div>Vítr: ${d.Vitr} m/s (${d.SmerVetra || ""})</div>
+      <div>Srážky: ${d.SrazkyDen || d.Srazky || 0} mm</div>
+    `;
+
     graphs.innerHTML = "";
 
     if (sensorEntities.length === 0) return;
@@ -132,10 +164,19 @@ class PocasiMeteoCard extends HTMLElement {
     const now = new Date();
     const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
 
+    const canvases = {};
     for (const sensor of sensorEntities) {
-      const url = `/api/history/period/${since}?filter_entity_id=${sensor}`;
+      const canvas = document.createElement("canvas");
+      canvas.classList.add("pm-graph");
+      canvas.height = 200;
+      graphs.appendChild(canvas);
+      canvases[sensor] = canvas;
+    }
 
-      let json = [];
+    const history = {};
+
+    await Promise.all(sensorEntities.map(async sensor => {
+      const url = `/api/history/period/${since}?filter_entity_id=${sensor}`;
       try {
         const resp = await fetch(url, {
           method: "GET",
@@ -147,14 +188,14 @@ class PocasiMeteoCard extends HTMLElement {
           credentials: "same-origin"
         });
 
-        if (!resp.ok) continue;
+        if (resp.ok) {
+          history[sensor] = await resp.json();
+        }
+      } catch {}
+    }));
 
-        json = await resp.json();
-      } catch (err) {
-        continue;
-      }
-
-      const raw = json[0] || [];
+    for (const sensor of sensorEntities) {
+      const raw = history[sensor]?.[0] || [];
 
       const points = raw
         .map(p => ({
@@ -172,15 +213,14 @@ class PocasiMeteoCard extends HTMLElement {
       const min = Math.min(...points.map(p => p.y));
       const max = Math.max(...points.map(p => p.y));
 
-      const canvas = document.createElement("canvas");
-      canvas.classList.add("pm-graph");
-      graphs.appendChild(canvas);
+      const canvas = canvases[sensor];
+      const ctx = canvas.getContext("2d");
 
       if (this._charts[sensor]) {
         this._charts[sensor].destroy();
       }
 
-      this._charts[sensor] = new Chart(canvas.getContext("2d"), {
+      this._charts[sensor] = new Chart(ctx, {
         type: "line",
         data: {
           datasets: [
