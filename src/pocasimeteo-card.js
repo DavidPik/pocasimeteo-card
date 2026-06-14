@@ -31,6 +31,7 @@ class PocasiMeteoCard extends HTMLElement {
     this._charts = {};
     this._lastAttributes = null;
     this._lastRender = 0;
+    this._updateInterval = null;
   }
 
   setConfig(config) {
@@ -39,7 +40,7 @@ class PocasiMeteoCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
   }
 
-  set hass(hass) {
+  async set hass(hass) {
     if (!this._initialized) {
       this._initialize();
       this._initialized = true;
@@ -48,10 +49,28 @@ class PocasiMeteoCard extends HTMLElement {
     const entity = hass.states[this.config.entity];
     if (!entity) return;
 
-    const refresh = entity.attributes.scan_interval || 60;
+    // 1) Load update_interval from config entry (only once)
+    if (!this._updateInterval) {
+      try {
+        const entryId = entity.attributes.config_entry_id;
+        if (entryId) {
+          const entry = await hass.callApi(
+            "GET",
+            `config/config_entries/entry/${entryId}`
+          );
+          this._updateInterval = entry.data.update_interval || 60;
+        }
+      } catch {
+        this._updateInterval = 60;
+      }
+    }
 
+    const refresh = this._updateInterval || 60;
+
+    // 2) Throttling
     if (Date.now() - this._lastRender < refresh * 1000) return;
 
+    // 3) Detect data change
     if (
       this._lastAttributes &&
       JSON.stringify(this._lastAttributes) === JSON.stringify(entity.attributes)
@@ -174,10 +193,10 @@ class PocasiMeteoCard extends HTMLElement {
 
     if (sensorEntities.length === 0) return;
 
+    // Correct token for HA 2024.6+
     const token =
-      hass.auth?.data?.access_token ||
       hass.connection?.options?.auth?.access_token ||
-      hass.auth?._saveTokens?.access_token ||
+      hass.auth?.data?.access_token ||
       null;
 
     const now = new Date();
@@ -195,7 +214,12 @@ class PocasiMeteoCard extends HTMLElement {
     const history = {};
 
     await Promise.all(sensorEntities.map(async sensor => {
-      const url = `/api/history/period/${since}?filter_entity_id=${sensor}`;
+      const url =
+        `/api/history/period/${since}` +
+        `?filter_entity_id=${sensor}` +
+        `&minimal_response` +
+        `&significant_changes_only=false`;
+
       try {
         const resp = await fetch(url, {
           method: "GET",
@@ -218,7 +242,7 @@ class PocasiMeteoCard extends HTMLElement {
 
       const points = raw
         .map(p => ({
-          x: new Date(p.last_changed),
+          x: p.last_changed ? new Date(p.last_changed) : new Date(),
           y: parseFloat(p.state)
         }))
         .filter(p => !isNaN(p.y));
