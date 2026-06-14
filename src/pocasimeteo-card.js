@@ -283,19 +283,34 @@ class PocasiMeteoCard extends HTMLElement {
 
       for (const p of raw) {
         const ts = Date.parse(p.last_changed);
-        const val = parseFloat(p.state);
+        const raw = p.state;
 
-        if (isNaN(ts)) {
-          console.warn("Invalid timestamp", p.last_changed);
+        // ignorujeme nečíselné hodnoty
+        if (
+          raw === null ||
+          raw === undefined ||
+          raw === "" ||
+          raw === "unknown" ||
+          raw === "unavailable" ||
+          raw === "None" ||
+          raw === "nan"
+        ) {
+          console.warn("Skipping non-numeric state:", raw);
           continue;
         }
+
+        const val = Number(raw);
         if (isNaN(val)) {
-          console.warn("Invalid value", p.state);
+          console.warn("Skipping NaN value:", raw);
+          continue;
+        }
+
+        if (isNaN(ts)) {
+          console.warn("Skipping invalid timestamp:", p.last_changed);
           continue;
         }
 
         points.push({ x: ts, y: val });
-      }
 
       console.log("Points for", sensor, points.length);
 
