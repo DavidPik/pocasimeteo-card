@@ -163,7 +163,13 @@ class PocasiMeteoCard extends HTMLElement {
       .filter(e => e.startsWith("sensor." + weatherId + "_"))
       .filter(e => {
         const st = hass.states[e].state;
-        return st !== "unknown" && st !== "unavailable" && !isNaN(parseFloat(st));
+        return (
+          st !== "unknown" &&
+          st !== "unavailable" &&
+          st !== null &&
+          st !== undefined &&
+          !isNaN(parseFloat(st))
+        );
       });
 
     console.log("Detected sensors:", sensorEntities);
@@ -261,7 +267,17 @@ class PocasiMeteoCard extends HTMLElement {
     }));
 
     for (const sensor of sensorEntities) {
-      const raw = history[sensor]?.[0] || [];
+      if (
+        !history[sensor] ||
+        !history[sensor][0] ||
+        !Array.isArray(history[sensor][0]) ||
+        history[sensor][0].length === 0
+      ) {
+        console.warn("Sensor has no history, skipping:", sensor);
+        continue;
+      }
+
+      const raw = history[sensor][0];
 
       const points = [];
 
