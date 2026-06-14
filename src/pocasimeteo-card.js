@@ -1,3 +1,5 @@
+import Chart from "./vendor/chart.js";
+
 class PocasiMeteoCard extends HTMLElement {
   setConfig(config) {
     if (!config.entity) throw new Error("entity is required");
@@ -5,32 +7,15 @@ class PocasiMeteoCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
   }
 
-  async set hass(hass) {
-    const entity = hass.states[this.config.entity];
-    if (!entity) return;
-
-    const d = entity.attributes;
-    const weatherId = this.config.entity.split(".")[1];
-
-    // Najdeme všechny senzory patřící k weather entitě
-    const sensorEntities = Object.keys(hass.states)
-      .filter(e => e.startsWith("sensor." + weatherId))
-      .filter(e => typeof hass.states[e].state === "string")
-      .filter(e => !isNaN(parseFloat(hass.states[e].state)));
-
-    // Načteme historii všech senzorů
-    const now = new Date();
-    const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
-
-    const history = {};
-    for (const sensor of sensorEntities) {
-      const url = `/api/history/period/${since}?filter_entity_id=${sensor}`;
-      const resp = await fetch(url, { headers: { "Content-Type": "application/json" }});
-      const json = await resp.json();
-      history[sensor] = json[0] || [];
+  set hass(hass) {
+    if (!this._initialized) {
+      this._initialize();
+      this._initialized = true;
     }
+    this._update(hass);
+  }
 
-    // Vytvoříme HTML
+  _initialize() {
     this.shadowRoot.innerHTML = `
       <style>
         .pm-card {
@@ -64,22 +49,55 @@ class PocasiMeteoCard extends HTMLElement {
       </style>
 
       <ha-card class="pm-card">
-        <div class="pm-header">
-          <div>
-            ${d.station_name}<br>
-            <span class="pm-condition">${d.condition || ""}</span>
-          </div>
-          <div style="opacity:0.6;">${d.timestamp}</div>
-        </div>
-
-        <div class="pm-temp">${d.TeplotaVnejsi}°</div>
-
+        <div id="header"></div>
+        <div id="temp"></div>
         <div id="graphs"></div>
       </ha-card>
     `;
+  }
 
-    // Vložíme grafy
-    const graphContainer = this.shadowRoot.getElementById("graphs");
+  async _update(hass) {
+    const entity = hass.states[this.config.entity];
+    if (!entity) return;
+
+    const d = entity.attributes;
+    const weatherId = this.config.entity.split(".")[1];
+
+    // Najdeme všechny číselné senzory
+    const sensorEntities = Object.keys(hass.states)
+      .filter(e => e.startsWith("sensor." + weatherId))
+      .filter(e => !isNaN(parseFloat(hass.states[e].state)));
+
+    // Načteme historii
+    const now = new Date();
+    const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
+
+    const history = {};
+    for (const sensor of sensorEntities) {
+      const url = `/api/history/period/${since}?filter_entity_id=${sensor}`;
+      const resp = await fetch(url);
+      const json = await resp.json();
+      history[sensor] = json[0] || [];
+    }
+
+    // UI
+    const header = this.shadowRoot.getElementById("header");
+    const temp = this.shadowRoot.getElementById("temp");
+    const graphs = this.shadowRoot.getElementById("graphs");
+
+    header.innerHTML = `
+      <div class="pm-header">
+        <div>
+          ${d.station_name}<br>
+          <span class="pm-condition">${d.condition || ""}</span>
+        </div>
+        <div style="opacity:0.6;">${d.timestamp}</div>
+      </div>
+    `;
+
+    temp.innerHTML = `<div class="pm-temp">${d.TeplotaVnejsi}°</div>`;
+
+    graphs.innerHTML = "";
 
     for (const sensor of sensorEntities) {
       const s = hass.states[sensor];
@@ -88,12 +106,14 @@ class PocasiMeteoCard extends HTMLElement {
 
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
-      graphContainer.appendChild(canvas);
+      graphs.appendChild(canvas);
 
       const points = history[sensor].map(p => ({
         x: new Date(p.last_changed),
         y: parseFloat(p.state)
       }));
+
+      if (points.length < 2) continue;
 
       const min = Math.min(...points.map(p => p.y));
       const max = Math.max(...points.map(p => p.y));
