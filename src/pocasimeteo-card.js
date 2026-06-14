@@ -49,7 +49,7 @@ class PocasiMeteoCard extends HTMLElement {
     const entity = hass.states[this.config.entity];
     if (!entity) return;
 
-    // 1) Load update_interval from config entry (only once)
+    // Load update_interval once
     if (!this._updateInterval) {
       const entryId = entity.attributes.config_entry_id;
       if (entryId) {
@@ -63,14 +63,13 @@ class PocasiMeteoCard extends HTMLElement {
       } else {
         this._updateInterval = 60;
       }
+      return; // wait for interval
     }
 
     const refresh = this._updateInterval || 60;
 
-    // 2) Throttling
     if (Date.now() - this._lastRender < refresh * 1000) return;
 
-    // 3) Detect data change
     if (
       this._lastAttributes &&
       JSON.stringify(this._lastAttributes) === JSON.stringify(entity.attributes)
@@ -193,12 +192,17 @@ class PocasiMeteoCard extends HTMLElement {
 
     if (sensorEntities.length === 0) return;
 
-    // Correct token for HA 2024.6+
+    // Robust token handling
     const token =
       hass.connection?.options?.accessToken ||
       hass.auth?.data?.access_token ||
       hass.connection?.options?.auth?.access_token ||
       null;
+
+    if (!token) {
+      console.warn("Token not ready");
+      return;
+    }
 
     const now = new Date();
     const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
@@ -225,7 +229,7 @@ class PocasiMeteoCard extends HTMLElement {
         const resp = await fetch(url, {
           method: "GET",
           headers: {
-            "Authorization": token ? `Bearer ${token}` : "",
+            "Authorization": `Bearer ${token}`,
             "Content-Type": "application/json",
             "Accept": "application/json"
           },
@@ -234,21 +238,31 @@ class PocasiMeteoCard extends HTMLElement {
 
         if (resp.ok) {
           history[sensor] = await resp.json();
+        } else {
+          console.warn("History fetch failed", sensor, resp.status);
         }
-      } catch {}
+      } catch (e) {
+        console.error("Fetch error", sensor, e);
+      }
     }));
 
     for (const sensor of sensorEntities) {
       const raw = history[sensor]?.[0] || [];
 
-      const points = raw
-        .map(p => ({
-          x: p.last_changed ? new Date(p.last_changed) : new Date(),
-          y: parseFloat(p.state)
-        }))
-        .filter(p => !isNaN(p.y));
+      const points = [];
 
-      if (points.length < 2) continue;
+      for (const p of raw) {
+        const ts = Date.parse(p.last_changed);
+        const val = parseFloat(p.state);
+        if (!isNaN(ts) && !isNaN(val)) {
+          points.push({ x: ts, y: val });
+        }
+      }
+
+      if (points.length < 2) {
+        console.warn("Not enough points for", sensor, points.length);
+        continue;
+      }
 
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
