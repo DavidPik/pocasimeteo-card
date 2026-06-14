@@ -29,7 +29,7 @@ class PocasiMeteoCard extends HTMLElement {
     setTimeout(() => {
       this._update(hass);
       this._updateScheduled = false;
-    }, 1000); // 1 s mezi aktualizacemi
+    }, 10000); // 10 s mezi aktualizacemi
   }
 
   _initialize() {
