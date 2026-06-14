@@ -194,10 +194,7 @@ class PocasiMeteoCard extends HTMLElement {
     if (sensorEntities.length === 0) return;
 
     // Correct token for HA 2024.6+
-    const token =
-      hass.connection?.options?.auth?.access_token ||
-      hass.auth?.data?.access_token ||
-      null;
+    const token = hass.connection?.options?.accessToken || null;
 
     const now = new Date();
     const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
