@@ -5,10 +5,10 @@ export default {
   input: "src/pocasimeteo-card.js",
   output: {
     file: "dist/pocasimeteo-card.js",
-    format: "es",
+    format: "esm",
   },
   plugins: [
     resolve(),
-    commonjs(),
+    commonjs()
   ]
 };
