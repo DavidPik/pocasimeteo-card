@@ -2,54 +2,33 @@ name: Build & Release PočasíMeteo Card
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version tag (např. v1.0.0)"
-        required: true
-      release_name:
-        description: "Název release (např. PočasíMeteo Card 1.0.0)"
-        required: true
-      release_notes:
-        description: "Poznámky k release"
-        required: false
-        default: ""
 
 jobs:
-  build-release:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Install Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Build card
+      - name: Download Chart.js
+        run: |
+          mkdir -p src/vendor
+          curl -L https://cdn.jsdelivr.net/npm/chart.js@latest/dist/chart.umd.js -o src/vendor/chart.js
+
+      - name: Build
         run: npm run build
 
-      - name: Verify build output
-        run: |
-          if [ ! -f "dist/pocasimeteo-card.js" ]; then
-            echo "ERROR: dist/pocasimeteo-card.js not found!"
-            exit 1
-          fi
-
-      - name: Create GitHub Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
+      - name: Create Release Artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.event.inputs.version }}
-          name: ${{ github.event.inputs.release_name }}
-          body: ${{ github.event.inputs.release_notes }}
-          draft: false
-          prerelease: false
-          files: |
-            dist/pocasimeteo-card.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: pocasimeteo-card
+          path: dist/pocasimeteo-card.js
