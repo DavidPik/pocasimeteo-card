@@ -281,36 +281,37 @@ class PocasiMeteoCard extends HTMLElement {
 
       const points = [];
 
-    for (const p of raw) {
-      const ts = Date.parse(p.last_changed);
-      const raw = p.state;
+      for (const p of raw) {
+        const ts = Date.parse(p.last_changed);
+        const raw = p.state;
 
-      // ignorujeme nečíselné hodnoty
-      if (
-        raw === null ||
-        raw === undefined ||
-        raw === "" ||
-        raw === "unknown" ||
-        raw === "unavailable" ||
-        raw === "None" ||
-        raw === "nan"
-      ) {
-        console.warn("Skipping non-numeric state:", raw);
-        continue;
+        // ignorujeme nečíselné hodnoty
+        if (
+          raw === null ||
+          raw === undefined ||
+          raw === "" ||
+          raw === "unknown" ||
+          raw === "unavailable" ||
+          raw === "None" ||
+          raw === "nan"
+        ) {
+          console.warn("Skipping non-numeric state:", raw);
+          continue;
+        }
+
+        const val = Number(raw);
+        if (isNaN(val)) {
+          console.warn("Skipping NaN value:", raw);
+          continue;
+        }
+
+        if (isNaN(ts)) {
+          console.warn("Skipping invalid timestamp:", p.last_changed);
+          continue;
+        }
+
+        points.push({ x: ts, y: val });
       }
-
-      const val = Number(raw);
-      if (isNaN(val)) {
-        console.warn("Skipping NaN value:", raw);
-        continue;
-      }
-
-      if (isNaN(ts)) {
-        console.warn("Skipping invalid timestamp:", p.last_changed);
-        continue;
-      }
-
-      points.push({ x: ts, y: val });
 
       console.log("Points for", sensor, points.length);
 
