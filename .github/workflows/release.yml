@@ -26,6 +26,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Sync version to package.json
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          VERSION="${TAG#v}"
+          echo "Setting version to $VERSION"
+          jq ".version = \"$VERSION\"" package.json > package.tmp.json
+          mv package.tmp.json package.json
+
       - name: Download Chart.js
         run: |
           mkdir -p src/vendor
