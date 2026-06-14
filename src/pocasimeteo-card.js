@@ -56,9 +56,11 @@ class PocasiMeteoCard extends HTMLElement {
         hass.callApi("GET", `config/config_entries/entry/${entryId}`)
           .then(entry => {
             this._updateInterval = entry.data.update_interval || 60;
+            console.log("Loaded update_interval:", this._updateInterval);
           })
           .catch(() => {
             this._updateInterval = 60;
+            console.warn("Failed to load update_interval, using 60s");
           });
       } else {
         this._updateInterval = 60;
@@ -164,6 +166,8 @@ class PocasiMeteoCard extends HTMLElement {
         return st !== "unknown" && st !== "unavailable" && !isNaN(parseFloat(st));
       });
 
+    console.log("Detected sensors:", sensorEntities);
+
     const header = this.shadowRoot.getElementById("header");
     const temp = this.shadowRoot.getElementById("temp");
     const current = this.shadowRoot.getElementById("current");
@@ -190,7 +194,10 @@ class PocasiMeteoCard extends HTMLElement {
 
     graphs.innerHTML = "";
 
-    if (sensorEntities.length === 0) return;
+    if (sensorEntities.length === 0) {
+      console.warn("No sensors found");
+      return;
+    }
 
     // Robust token handling
     const token =
@@ -199,8 +206,10 @@ class PocasiMeteoCard extends HTMLElement {
       hass.connection?.options?.auth?.access_token ||
       null;
 
+    console.log("Token:", token ? "OK" : "MISSING");
+
     if (!token) {
-      console.warn("Token not ready");
+      console.warn("Token not ready, skipping update");
       return;
     }
 
@@ -225,6 +234,8 @@ class PocasiMeteoCard extends HTMLElement {
         `&minimal_response` +
         `&significant_changes_only=false`;
 
+      console.log("History URL:", url);
+
       try {
         const resp = await fetch(url, {
           method: "GET",
@@ -236,8 +247,11 @@ class PocasiMeteoCard extends HTMLElement {
           credentials: "same-origin"
         });
 
+        console.log("History status for", sensor, resp.status);
+
         if (resp.ok) {
           history[sensor] = await resp.json();
+          console.log("History data for", sensor, history[sensor]);
         } else {
           console.warn("History fetch failed", sensor, resp.status);
         }
@@ -254,13 +268,23 @@ class PocasiMeteoCard extends HTMLElement {
       for (const p of raw) {
         const ts = Date.parse(p.last_changed);
         const val = parseFloat(p.state);
-        if (!isNaN(ts) && !isNaN(val)) {
-          points.push({ x: ts, y: val });
+
+        if (isNaN(ts)) {
+          console.warn("Invalid timestamp", p.last_changed);
+          continue;
         }
+        if (isNaN(val)) {
+          console.warn("Invalid value", p.state);
+          continue;
+        }
+
+        points.push({ x: ts, y: val });
       }
 
+      console.log("Points for", sensor, points.length);
+
       if (points.length < 2) {
-        console.warn("Not enough points for", sensor, points.length);
+        console.warn("Not enough points for", sensor);
         continue;
       }
 
@@ -277,6 +301,8 @@ class PocasiMeteoCard extends HTMLElement {
       if (this._charts[sensor]) {
         this._charts[sensor].destroy();
       }
+
+      console.log("Drawing chart for", sensor);
 
       this._charts[sensor] = new Chart(ctx, {
         type: "line",
