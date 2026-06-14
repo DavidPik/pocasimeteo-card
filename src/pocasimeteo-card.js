@@ -1,11 +1,17 @@
 import Chart from "./vendor/chart.js";
 
 class PocasiMeteoCard extends HTMLElement {
+  constructor() {
+    super();
+    this._initialized = false;
+    this._updateScheduled = false;
+    this._charts = {};
+  }
+
   setConfig(config) {
     if (!config.entity) throw new Error("entity is required");
     this.config = config;
     this.attachShadow({ mode: "open" });
-    this._charts = {};
   }
 
   set hass(hass) {
@@ -13,7 +19,17 @@ class PocasiMeteoCard extends HTMLElement {
       this._initialize();
       this._initialized = true;
     }
-    this._update(hass);
+
+    // Throttling – nevolat _update příliš často
+    if (this._updateScheduled) {
+      return;
+    }
+
+    this._updateScheduled = true;
+    setTimeout(() => {
+      this._update(hass);
+      this._updateScheduled = false;
+    }, 1000); // 1 s mezi aktualizacemi
   }
 
   _initialize() {
@@ -44,6 +60,9 @@ class PocasiMeteoCard extends HTMLElement {
           width: 100%;
           height: 200px;
         }
+        @media (max-width: 480px) {
+          .pm-temp { font-size: 48px; }
+        }
       </style>
 
       <ha-card class="pm-card">
@@ -55,13 +74,18 @@ class PocasiMeteoCard extends HTMLElement {
   }
 
   async _update(hass) {
+    console.log("[PM] _update() start");
+
     const entity = hass.states[this.config.entity];
-    if (!entity) return;
+    if (!entity) {
+      console.warn("[PM] Weather entity not found:", this.config.entity);
+      return;
+    }
 
     const d = entity.attributes;
     const weatherId = this.config.entity.split(".")[1];
 
-    // Najdeme všechny číselné senzory
+    // Najdeme všechny číselné senzory s prefixem meteostanice (gar632_)
     const sensorEntities = Object.keys(hass.states)
       .filter(e => e.startsWith("sensor." + weatherId + "_"))
       .filter(e => {
@@ -69,7 +93,9 @@ class PocasiMeteoCard extends HTMLElement {
         return st !== "unknown" && st !== "unavailable" && !isNaN(parseFloat(st));
       });
 
-    // UI
+    console.log("[PM] WeatherId:", weatherId);
+    console.log("[PM] Sensor entities:", sensorEntities);
+
     const header = this.shadowRoot.getElementById("header");
     const temp = this.shadowRoot.getElementById("temp");
     const graphs = this.shadowRoot.getElementById("graphs");
@@ -87,18 +113,26 @@ class PocasiMeteoCard extends HTMLElement {
     temp.innerHTML = `<div class="pm-temp">${d.TeplotaVnejsi}°</div>`;
     graphs.innerHTML = "";
 
-    // Token kompatibilní se všemi verzemi HA
+    if (sensorEntities.length === 0) {
+      console.warn("[PM] No numeric sensors found for prefix:", weatherId);
+      return;
+    }
+
+    // Token – pokusíme se ho získat z různých míst
     const token =
       hass.auth?.data?.access_token ||
       hass.connection?.options?.auth?.access_token ||
       hass.auth?._saveTokens?.access_token ||
       null;
 
+    console.log("[PM] Token present:", !!token);
+
     const now = new Date();
     const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
 
     for (const sensor of sensorEntities) {
       const url = `/api/history/period/${since}?filter_entity_id=${sensor}`;
+      console.log("[PM] Fetching history for:", sensor, url);
 
       let json = [];
       try {
@@ -112,14 +146,22 @@ class PocasiMeteoCard extends HTMLElement {
           credentials: "same-origin"
         });
 
-        if (!resp.ok) continue;
+        console.log("[PM] Response status for", sensor, ":", resp.status);
+
+        if (!resp.ok) {
+          console.warn("[PM] History fetch failed:", sensor, resp.status);
+          continue;
+        }
+
         json = await resp.json();
       } catch (err) {
-        console.error("History fetch error:", err);
+        console.error("[PM] History fetch error for", sensor, ":", err);
         continue;
       }
 
       const raw = json[0] || [];
+      console.log("[PM] Raw history length for", sensor, ":", raw.length);
+
       const points = raw
         .map(p => ({
           x: new Date(p.last_changed),
@@ -127,7 +169,12 @@ class PocasiMeteoCard extends HTMLElement {
         }))
         .filter(p => !isNaN(p.y));
 
-      if (points.length < 2) continue;
+      console.log("[PM] Valid points for", sensor, ":", points.length);
+
+      if (points.length < 2) {
+        console.warn("[PM] Not enough points for chart:", sensor);
+        continue;
+      }
 
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
@@ -140,10 +187,12 @@ class PocasiMeteoCard extends HTMLElement {
       canvas.classList.add("pm-graph");
       graphs.appendChild(canvas);
 
-      // Zničíme starý graf
       if (this._charts[sensor]) {
+        console.log("[PM] Destroying old chart for", sensor);
         this._charts[sensor].destroy();
       }
+
+      console.log("[PM] Drawing chart for", sensor);
 
       this._charts[sensor] = new Chart(canvas.getContext("2d"), {
         type: "line",
@@ -189,6 +238,8 @@ class PocasiMeteoCard extends HTMLElement {
         }
       });
     }
+
+    console.log("[PM] _update() end");
   }
 
   getCardSize() {
