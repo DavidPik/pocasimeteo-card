@@ -40,7 +40,7 @@ class PocasiMeteoCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
   }
 
-  async set hass(hass) {
+  set hass(hass) {
     if (!this._initialized) {
       this._initialize();
       this._initialized = true;
@@ -51,16 +51,16 @@ class PocasiMeteoCard extends HTMLElement {
 
     // 1) Load update_interval from config entry (only once)
     if (!this._updateInterval) {
-      try {
-        const entryId = entity.attributes.config_entry_id;
-        if (entryId) {
-          const entry = await hass.callApi(
-            "GET",
-            `config/config_entries/entry/${entryId}`
-          );
-          this._updateInterval = entry.data.update_interval || 60;
-        }
-      } catch {
+      const entryId = entity.attributes.config_entry_id;
+      if (entryId) {
+        hass.callApi("GET", `config/config_entries/entry/${entryId}`)
+          .then(entry => {
+            this._updateInterval = entry.data.update_interval || 60;
+          })
+          .catch(() => {
+            this._updateInterval = 60;
+          });
+      } else {
         this._updateInterval = 60;
       }
     }
