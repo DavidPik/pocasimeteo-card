@@ -1,6 +1,6 @@
 {
   "name": "pocasimeteo-card",
-  "version": "6.0.23",
+  "version": "6.0.24",
   "description": "Home Assistant Lovelace card for PočasíMeteo.cz with automatic sensor graphs",
   "main": "dist/pocasimeteo-card.js",
   "scripts": {
