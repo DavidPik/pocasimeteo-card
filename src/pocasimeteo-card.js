@@ -1,5 +1,27 @@
-import Chart from "./vendor/chart.js";
-import "./vendor/chartjs-adapter-date-fns.js";
+import {
+  Chart,
+  LineController,
+  LineElement,
+  PointElement,
+  LinearScale,
+  TimeScale,
+  Filler,
+  Tooltip,
+  Legend
+} from "chart.js";
+
+import "chartjs-adapter-date-fns";
+
+Chart.register(
+  LineController,
+  LineElement,
+  PointElement,
+  LinearScale,
+  TimeScale,
+  Filler,
+  Tooltip,
+  Legend
+);
 
 class PocasiMeteoCard extends HTMLElement {
   constructor() {
@@ -69,13 +91,8 @@ class PocasiMeteoCard extends HTMLElement {
   }
 
   async _update(hass) {
-    console.log("[PM] _update() start");
-
     const entity = hass.states[this.config.entity];
-    if (!entity) {
-      console.warn("[PM] Weather entity not found:", this.config.entity);
-      return;
-    }
+    if (!entity) return;
 
     const d = entity.attributes;
     const weatherId = this.config.entity.split(".")[1];
@@ -86,8 +103,6 @@ class PocasiMeteoCard extends HTMLElement {
         const st = hass.states[e].state;
         return st !== "unknown" && st !== "unavailable" && !isNaN(parseFloat(st));
       });
-
-    console.log("[PM] Sensors:", sensorEntities);
 
     const header = this.shadowRoot.getElementById("header");
     const temp = this.shadowRoot.getElementById("temp");
@@ -106,10 +121,7 @@ class PocasiMeteoCard extends HTMLElement {
     temp.innerHTML = `<div class="pm-temp">${d.TeplotaVnejsi}°</div>`;
     graphs.innerHTML = "";
 
-    if (sensorEntities.length === 0) {
-      console.warn("[PM] No sensors found for prefix:", weatherId);
-      return;
-    }
+    if (sensorEntities.length === 0) return;
 
     const token =
       hass.auth?.data?.access_token ||
@@ -117,14 +129,11 @@ class PocasiMeteoCard extends HTMLElement {
       hass.auth?._saveTokens?.access_token ||
       null;
 
-    console.log("[PM] Token present:", !!token);
-
     const now = new Date();
     const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
 
     for (const sensor of sensorEntities) {
       const url = `/api/history/period/${since}?filter_entity_id=${sensor}`;
-      console.log("[PM] Fetching:", sensor, url);
 
       let json = [];
       try {
@@ -138,18 +147,14 @@ class PocasiMeteoCard extends HTMLElement {
           credentials: "same-origin"
         });
 
-        console.log("[PM] Response:", sensor, resp.status);
-
         if (!resp.ok) continue;
 
         json = await resp.json();
       } catch (err) {
-        console.error("[PM] Fetch error:", sensor, err);
         continue;
       }
 
       const raw = json[0] || [];
-      console.log("[PM] Raw length:", sensor, raw.length);
 
       const points = raw
         .map(p => ({
@@ -157,8 +162,6 @@ class PocasiMeteoCard extends HTMLElement {
           y: parseFloat(p.state)
         }))
         .filter(p => !isNaN(p.y));
-
-      console.log("[PM] Points:", sensor, points.length);
 
       if (points.length < 2) continue;
 
@@ -176,8 +179,6 @@ class PocasiMeteoCard extends HTMLElement {
       if (this._charts[sensor]) {
         this._charts[sensor].destroy();
       }
-
-      console.log("[PM] Drawing chart:", sensor);
 
       this._charts[sensor] = new Chart(canvas.getContext("2d"), {
         type: "line",
@@ -224,8 +225,6 @@ class PocasiMeteoCard extends HTMLElement {
         }
       });
     }
-
-    console.log("[PM] _update() end");
   }
 
   getCardSize() {
