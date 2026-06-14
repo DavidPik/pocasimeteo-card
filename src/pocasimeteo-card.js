@@ -29,6 +29,8 @@ class PocasiMeteoCard extends HTMLElement {
     this._initialized = false;
     this._rendering = false;
     this._charts = {};
+    this._lastAttributes = null;
+    this._lastRender = 0;
   }
 
   setConfig(config) {
@@ -42,6 +44,23 @@ class PocasiMeteoCard extends HTMLElement {
       this._initialize();
       this._initialized = true;
     }
+
+    const entity = hass.states[this.config.entity];
+    if (!entity) return;
+
+    const refresh = entity.attributes.scan_interval || 60;
+
+    if (Date.now() - this._lastRender < refresh * 1000) return;
+
+    if (
+      this._lastAttributes &&
+      JSON.stringify(this._lastAttributes) === JSON.stringify(entity.attributes)
+    ) {
+      return;
+    }
+
+    this._lastAttributes = JSON.parse(JSON.stringify(entity.attributes));
+    this._lastRender = Date.now();
 
     if (this._rendering) return;
 
