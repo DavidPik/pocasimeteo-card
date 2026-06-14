@@ -30,14 +30,16 @@ jobs:
         run: |
           TAG="${{ github.event.inputs.tag }}"
           VERSION="${TAG#v}"
-          echo "Setting version to $VERSION"
           jq ".version = \"$VERSION\"" package.json > package.tmp.json
           mv package.tmp.json package.json
 
-      - name: Download Chart.js
+      - name: Download Chart.js + adapter
         run: |
           mkdir -p src/vendor
-          curl -L https://cdn.jsdelivr.net/npm/chart.js@latest/dist/chart.umd.js -o src/vendor/chart.js
+          curl -L https://cdn.jsdelivr.net/npm/chart.js@latest/dist/chart.umd.js \
+            -o src/vendor/chart.js
+          curl -L https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@latest/dist/chartjs-adapter-date-fns.bundle.js \
+            -o src/vendor/chartjs-adapter-date-fns.js
 
       - name: Build
         run: npm run build
