@@ -10,6 +10,9 @@ on:
         description: "Název release"
         required: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,6 +35,14 @@ jobs:
           VERSION="${TAG#v}"
           jq ".version = \"$VERSION\"" package.json > package.tmp.json
           mv package.tmp.json package.json
+
+      - name: Commit updated package.json
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add package.json
+          git commit -m "Update version to ${{ github.event.inputs.tag }}"
+          git push
 
       - name: Download Chart.js + adapter
         run: |
