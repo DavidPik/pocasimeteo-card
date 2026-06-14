@@ -2,6 +2,13 @@ name: Build & Release PočasíMeteo Card
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag release (např. v6.0.1)"
+        required: true
+      name:
+        description: "Název release"
+        required: true
 
 jobs:
   build:
@@ -27,8 +34,11 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: pocasimeteo-card
-          path: dist/pocasimeteo-card.js
+          tag_name: ${{ github.event.inputs.tag }}
+          name: ${{ github.event.inputs.name }}
+          files: dist/pocasimeteo-card.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
