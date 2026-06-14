@@ -66,21 +66,12 @@ class PocasiMeteoCard extends HTMLElement {
     // Najdeme všechny číselné senzory
     const sensorEntities = Object.keys(hass.states)
       .filter(e => e.startsWith("sensor." + weatherId))
-      .filter(e => !isNaN(parseFloat(hass.states[e].state)));
+      .filter(e => {
+        const st = hass.states[e].state;
+        return st !== "unknown" && st !== "unavailable" && !isNaN(parseFloat(st));
+      });
 
-    // Načteme historii
-    const now = new Date();
-    const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
-
-    const history = {};
-    for (const sensor of sensorEntities) {
-      const url = `/api/history/period/${since}?filter_entity_id=${sensor}`;
-      const resp = await fetch(url);
-      const json = await resp.json();
-      history[sensor] = json[0] || [];
-    }
-
-    // UI
+    // UI prvky
     const header = this.shadowRoot.getElementById("header");
     const temp = this.shadowRoot.getElementById("temp");
     const graphs = this.shadowRoot.getElementById("graphs");
@@ -96,27 +87,64 @@ class PocasiMeteoCard extends HTMLElement {
     `;
 
     temp.innerHTML = `<div class="pm-temp">${d.TeplotaVnejsi}°</div>`;
-
     graphs.innerHTML = "";
 
+    // Načteme historii všech senzorů
+    const now = new Date();
+    const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
+
+    const history = {};
+
+    for (const sensor of sensorEntities) {
+      const url = `/api/history/period/${since}?filter_entity_id=${sensor}`;
+
+      let json = [];
+      try {
+        const resp = await fetch(url, {
+          headers: {
+            "Authorization": `Bearer ${hass.auth.data.access_token}`,
+            "Content-Type": "application/json"
+          }
+        });
+
+        if (!resp.ok) {
+          console.warn("History fetch failed:", sensor, resp.status);
+          continue;
+        }
+
+        json = await resp.json();
+      } catch (err) {
+        console.error("History fetch error:", err);
+        continue;
+      }
+
+      history[sensor] = json[0] || [];
+    }
+
+    // Vykreslíme grafy
     for (const sensor of sensorEntities) {
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
       const name = s.attributes.friendly_name || sensor;
 
-      const canvas = document.createElement("canvas");
-      canvas.classList.add("pm-graph");
-      graphs.appendChild(canvas);
+      const raw = history[sensor];
+      if (!raw || raw.length < 2) continue;
 
-      const points = history[sensor].map(p => ({
-        x: new Date(p.last_changed),
-        y: parseFloat(p.state)
-      }));
+      const points = raw
+        .map(p => ({
+          x: new Date(p.last_changed),
+          y: parseFloat(p.state)
+        }))
+        .filter(p => !isNaN(p.y));
 
       if (points.length < 2) continue;
 
       const min = Math.min(...points.map(p => p.y));
       const max = Math.max(...points.map(p => p.y));
+
+      const canvas = document.createElement("canvas");
+      canvas.classList.add("pm-graph");
+      graphs.appendChild(canvas);
 
       new Chart(canvas.getContext("2d"), {
         type: "line",
