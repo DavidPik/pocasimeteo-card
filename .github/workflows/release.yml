@@ -47,7 +47,7 @@ jobs:
       - name: Download Chart.js + adapter
         run: |
           mkdir -p src/vendor
-          curl -L https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.esm.js -o src/vendor/chart.js
+          curl -L https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.mjs -o src/vendor/chart.js
           curl -L https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.esm.js -o src/vendor/chartjs-adapter-date-fns.js
 
       - name: Build
