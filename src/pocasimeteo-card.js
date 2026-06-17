@@ -156,20 +156,24 @@ class PocasiMeteoCard extends HTMLElement {
     const entity = hass.states[this.config.entity];
     if (!entity) return;
 
-    const d = entity.attributes;
-    const weatherId = this.config.entity.split(".")[1];
+    // Získáme prefix senzorů z atributu station_name
+    const weatherEntity = hass.states[this.config.entity];
+    const prefix = (weatherEntity?.attributes?.station_name || "")
+      .toLowerCase()
+      .replace(/\s+/g, "_");
 
+    console.log("Detected prefix:", prefix);
+
+    // Najdeme všechny senzory s tímto prefixem, které mají číselnou hodnotu
     const sensorEntities = Object.keys(hass.states)
-      .filter(e => e.startsWith("sensor." + weatherId + "_"))
+      .filter(e => e.startsWith("sensor." + prefix + "_"))
       .filter(e => {
         const st = hass.states[e].state;
-        return (
-          st !== "unknown" &&
-          st !== "unavailable" &&
-          st !== null &&
-          st !== undefined &&
-          !isNaN(parseFloat(st))
-        );
+        return st !== "unknown" &&
+               st !== "unavailable" &&
+               st !== null &&
+               st !== undefined &&
+               !isNaN(Number(st));
       });
 
     console.log("Detected sensors:", sensorEntities);
@@ -179,6 +183,8 @@ class PocasiMeteoCard extends HTMLElement {
     const current = this.shadowRoot.getElementById("current");
     const graphs = this.shadowRoot.getElementById("graphs");
 
+    const d = entity.attributes;
+    
     header.innerHTML = `
       <div class="pm-header">
         <div>
