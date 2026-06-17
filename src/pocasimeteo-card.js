@@ -232,7 +232,12 @@ class PocasiMeteoCard extends HTMLElement {
     for (const sensor of sensorEntities) {
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
-      canvas.height = 200;
+
+      // Nastavení správné velikosti canvasu
+      canvas.height = 200;             // bitmapová výška
+      canvas.style.height = "200px";   // CSS výška – kritické!
+      canvas.style.width = "100%";     // CSS šířka
+
       graphs.appendChild(canvas);
       canvases[sensor] = canvas;
     }
