@@ -233,17 +233,19 @@ class PocasiMeteoCard extends HTMLElement {
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
 
-      // Nastavení správné velikosti canvasu
-      canvas.height = 200;             // bitmapová výška
-      canvas.style.height = "200px";   // CSS výška – kritické!
-      canvas.style.width = "100%";     // CSS šířka
+      // Správné nastavení velikosti canvasu
+      // 1) bitmapová výška
+      canvas.height = 200;
 
+      // 2) CSS výška a šířka — MUSÍ být nastaveny před vložením do DOM
+      canvas.style.setProperty("height", "200px");
+      canvas.style.setProperty("width", "100%");
+
+      // 3) vložit až po nastavení stylů
       graphs.appendChild(canvas);
+
       canvases[sensor] = canvas;
     }
-
-    // Donutíme Chart.js přepočítat layout po opravě výšky
-    setTimeout(() => chart.resize(), 0);
 
     const history = {};
 
@@ -377,7 +379,7 @@ class PocasiMeteoCard extends HTMLElement {
               showLine: false
             }
           ]
-        },
+        },       
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -394,6 +396,10 @@ class PocasiMeteoCard extends HTMLElement {
           }
         }
       });
+ 
+      // Donutíme Chart.js přepočítat layout po vytvoření grafu
+      setTimeout(() => chart.resize(), 0);
+ 
     }
   }
 
