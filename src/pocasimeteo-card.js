@@ -242,6 +242,9 @@ class PocasiMeteoCard extends HTMLElement {
       canvases[sensor] = canvas;
     }
 
+    // Donutíme Chart.js přepočítat layout po opravě výšky
+    setTimeout(() => chart.resize(), 0);
+
     const history = {};
 
     await Promise.all(sensorEntities.map(async sensor => {
