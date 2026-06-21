@@ -398,7 +398,11 @@ class PocasiMeteoCard extends HTMLElement {
       });
  
       // Donutíme Chart.js přepočítat layout po vytvoření grafu
-      setTimeout(() => chart.resize(), 0);
+      setTimeout(() => {
+        if (this._charts[sensor]) {
+          this._charts[sensor].resize();
+        }
+      }, 0);
  
     }
   }
