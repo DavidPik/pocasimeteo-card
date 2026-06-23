@@ -84,13 +84,32 @@ class PocasiMeteoCard extends HTMLElement {
   }
 
   set hass(hass) {
+    // -----------------------------
+    // 🔥 KONTROLA BACKEND KOMPONENTY
+    // -----------------------------
+    const entity = hass.states[this.config.entity];
+
+    if (!entity || !entity.attributes || !entity.attributes.station_name) {
+      this.shadowRoot.innerHTML = `
+        <ha-card style="padding:16px; color: var(--primary-text-color);">
+          <h2>PočasíMeteo</h2>
+          <p style="opacity:0.7;">
+            Backendová komponenta <b>pocasimeteo</b> není dostupná.<br>
+            Zkontroluj, zda je integrace nainstalovaná a aktivní.
+          </p>
+        </ha-card>
+      `;
+      return;
+    }
+
+    // -----------------------------
+    // POKRAČUJEME, BACKEND JE OK
+    // -----------------------------
+
     if (!this._initialized) {
       this._initialize();
       this._initialized = true;
     }
-
-    const entity = hass.states[this.config.entity];
-    if (!entity) return;
 
     if (!this._updateInterval) {
       const entryId = entity.attributes.config_entry_id;
@@ -275,7 +294,6 @@ class PocasiMeteoCard extends HTMLElement {
     const canvases = {};
     for (const sensor of sensorEntities) {
       const suffix = sensor.replace("sensor." + prefix + "_", "");
-      if (NON_GRAPH_SENSORS.includes(suffix)) continue;
 
       const tile = document.createElement("div");
       tile.classList.add("pm-graph-tile");
