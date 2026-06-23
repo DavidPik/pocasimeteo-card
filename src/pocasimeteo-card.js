@@ -23,6 +23,19 @@ Chart.register(
   Legend
 );
 
+// Barvy sladěné s grafy na stránce Meteostanice Hostivice
+const COLOR_MAP = {
+  teplota_vnejsi: "#ff5722",
+  vlhkost_vnejsi: "#2196f3",
+  tlak_rel: "#9c27b0",
+  tlak: "#9c27b0",
+  vitr: "#4caf50",
+  vitr_naraz: "#2e7d32",
+  srazky: "#03a9f4",
+  srazky_den: "#0288d1",
+  uv: "#ffeb3b"
+};
+
 class PocasiMeteoCard extends HTMLElement {
   constructor() {
     super();
@@ -32,6 +45,7 @@ class PocasiMeteoCard extends HTMLElement {
     this._lastAttributes = null;
     this._lastRender = 0;
     this._updateInterval = null;
+    this._lastFetch = 0; // minimální interval pro načtení dat z backendu
   }
 
   setConfig(config) {
@@ -126,15 +140,27 @@ class PocasiMeteoCard extends HTMLElement {
           font-size: 16px;
         }
 
+        /* Grafy jako samostatné dlaždice s reflow */
         .pm-graphs {
           display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
           gap: 16px;
+          margin-top: 8px;
         }
 
-        @media (min-width: 900px) {
-          .pm-graphs {
-            grid-template-columns: repeat(2, 1fr);
-          }
+        .pm-graph-tile {
+          background: var(--ha-card-background, #fff);
+          border-radius: 12px;
+          padding: 12px;
+          box-shadow: var(--ha-card-box-shadow, 0 2px 4px rgba(0,0,0,0.2));
+          display: flex;
+          flex-direction: column;
+        }
+
+        .pm-graph-title {
+          font-size: 1em;
+          font-weight: 600;
+          margin-bottom: 8px;
         }
 
         .pm-graph {
@@ -155,6 +181,18 @@ class PocasiMeteoCard extends HTMLElement {
   async _update(hass) {
     const entity = hass.states[this.config.entity];
     if (!entity) return;
+
+    // Minimální interval 30 s pro načtení nových dat z backendu
+    const nowTs = Date.now();
+    if (nowTs - this._lastFetch < 30000) {
+      console.log(
+        "Skipping backend fetch, last fetch",
+        ((nowTs - this._lastFetch) / 1000).toFixed(1),
+        "s ago"
+      );
+      return;
+    }
+    this._lastFetch = nowTs;
 
     // Získáme prefix senzorů z atributu station_name
     const weatherEntity = hass.states[this.config.entity];
@@ -230,19 +268,29 @@ class PocasiMeteoCard extends HTMLElement {
 
     const canvases = {};
     for (const sensor of sensorEntities) {
+      const tile = document.createElement("div");
+      tile.classList.add("pm-graph-tile");
+
+      const s = hass.states[sensor];
+      const name = s.attributes.friendly_name || sensor;
+
+      const title = document.createElement("div");
+      title.classList.add("pm-graph-title");
+      title.textContent = name;
+
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
 
-      // Správné nastavení velikosti canvasu
-      // 1) bitmapová výška
+      // bitmapová výška
       canvas.height = 200;
 
-      // 2) CSS výška a šířka — MUSÍ být nastaveny před vložením do DOM
+      // CSS výška a šířka
       canvas.style.setProperty("height", "200px");
       canvas.style.setProperty("width", "100%");
 
-      // 3) vložit až po nastavení stylů
-      graphs.appendChild(canvas);
+      tile.appendChild(title);
+      tile.appendChild(canvas);
+      graphs.appendChild(tile);
 
       canvases[sensor] = canvas;
     }
@@ -299,25 +347,25 @@ class PocasiMeteoCard extends HTMLElement {
 
       for (const p of raw) {
         const ts = Date.parse(p.last_changed);
-        const raw = p.state;
+        const rawVal = p.state;
 
         // ignorujeme nečíselné hodnoty
         if (
-          raw === null ||
-          raw === undefined ||
-          raw === "" ||
-          raw === "unknown" ||
-          raw === "unavailable" ||
-          raw === "None" ||
-          raw === "nan"
+          rawVal === null ||
+          rawVal === undefined ||
+          rawVal === "" ||
+          rawVal === "unknown" ||
+          rawVal === "unavailable" ||
+          rawVal === "None" ||
+          rawVal === "nan"
         ) {
-          console.warn("Skipping non-numeric state:", raw);
+          console.warn("Skipping non-numeric state:", rawVal);
           continue;
         }
 
-        const val = Number(raw);
+        const val = Number(rawVal);
         if (isNaN(val)) {
-          console.warn("Skipping NaN value:", raw);
+          console.warn("Skipping NaN value:", rawVal);
           continue;
         }
 
@@ -350,7 +398,10 @@ class PocasiMeteoCard extends HTMLElement {
         this._charts[sensor].destroy();
       }
 
-      console.log("Drawing chart for", sensor);
+      // Barva podle typu senzoru (sladěná s webem)
+      const color = this._getColorForSensor(sensor, prefix);
+
+      console.log("Drawing chart for", sensor, "with color", color);
 
       this._charts[sensor] = new Chart(ctx, {
         type: "line",
@@ -359,8 +410,8 @@ class PocasiMeteoCard extends HTMLElement {
             {
               label: name,
               data: points,
-              borderColor: "#3b82f6",
-              backgroundColor: "rgba(59,130,246,0.2)",
+              borderColor: color,
+              backgroundColor: color + "33",
               tension: 0.3,
               pointRadius: 0
             },
@@ -403,8 +454,14 @@ class PocasiMeteoCard extends HTMLElement {
           this._charts[sensor].resize();
         }
       }, 0);
- 
     }
+  }
+
+  _getColorForSensor(sensorId, prefix) {
+    const base = "sensor." + prefix + "_";
+    let key = sensorId.startsWith(base) ? sensorId.slice(base.length) : sensorId;
+    key = key.toLowerCase();
+    return COLOR_MAP[key] || "#3b82f6";
   }
 
   getCardSize() {
