@@ -84,12 +84,13 @@ class PocasiMeteoCard extends HTMLElement {
   }
 
   set hass(hass) {
-    // -----------------------------
-    // 🔥 KONTROLA BACKEND KOMPONENTY
-    // -----------------------------
     const entity = hass.states[this.config.entity];
 
-    if (!entity || !entity.attributes || !entity.attributes.station_name) {
+    // -----------------------------------------
+    // 🔥 KONTROLA BACKENDU — varianta A
+    // Backend je dostupný, pokud existuje atribut TeplotaVnejsi
+    // -----------------------------------------
+    if (!entity || !entity.attributes || !("TeplotaVnejsi" in entity.attributes)) {
       this.shadowRoot.innerHTML = `
         <ha-card style="padding:16px; color: var(--primary-text-color);">
           <h2>PočasíMeteo</h2>
@@ -102,10 +103,7 @@ class PocasiMeteoCard extends HTMLElement {
       return;
     }
 
-    // -----------------------------
-    // POKRAČUJEME, BACKEND JE OK
-    // -----------------------------
-
+    // Backend OK → pokračujeme
     if (!this._initialized) {
       this._initialize();
       this._initialized = true;
