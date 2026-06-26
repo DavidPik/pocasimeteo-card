@@ -349,6 +349,7 @@ class PocasiMeteoCard extends HTMLElement {
         (isLightTheme(host) ? "#ffffff" : "#1c1c1c");
 
       canvas.style.backgroundColor = bgColor;
+      tile.style.backgroundColor = bgColor;
 
       this._charts[sensor] = new Chart(ctx, {
         type: "line",
