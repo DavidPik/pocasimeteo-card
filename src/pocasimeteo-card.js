@@ -1,4 +1,4 @@
-/*  =======  POCASIMETEO CARD – VERZE S UPRAVENOU LEGENDOU A NADPISY  =======  */
+/*  =======  POCASIMETEO CARD – VERZE S OPRAVOU PRO MOBILNÍ APLIKACI  =======  */
 
 import {
   Chart,
@@ -64,6 +64,16 @@ const COLOR_MAP = {
   Pm2: "#5e35b1",
   Pm1v: "#9575cd"
 };
+
+/* === FUNKCE: bezpečné čtení CSS proměnných s fallbackem === */
+function safeCssVar(el, name, fallback) {
+  try {
+    const v = getComputedStyle(el).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 class PocasiMeteoCard extends HTMLElement {
   constructor() {
@@ -145,14 +155,21 @@ class PocasiMeteoCard extends HTMLElement {
   _initialize() {
     this.shadowRoot.innerHTML = `
       <style>
-        .pm-card { padding:16px; color:var(--primary-text-color); display:flex; flex-direction:column; gap:16px; }
+        .pm-card { padding:16px; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:16px; }
         .pm-header { display:flex; justify-content:space-between; font-size:20px; font-weight:600; }
         .pm-condition { opacity:0.7; font-size:14px; }
         .pm-temp { font-size:64px; font-weight:300; }
         .pm-current { display:flex; flex-wrap:wrap; gap:16px; opacity:0.8; font-size:16px; }
         .pm-graphs { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; margin-top:8px; }
-        .pm-graph-tile { background:var(--ha-card-background,#fff); border-radius:12px; padding:12px; box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display:flex; flex-direction:column; }
-        .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; }
+        .pm-graph-tile { 
+          background:var(--ha-card-background,#1c1c1c); 
+          border-radius:12px; 
+          padding:12px; 
+          box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); 
+          display:flex; 
+          flex-direction:column; 
+        }
+        .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; color:var(--primary-text-color,#fff); }
         .pm-graph { width:100%; height:200px; }
       </style>
 
@@ -177,7 +194,6 @@ class PocasiMeteoCard extends HTMLElement {
       .toLowerCase()
       .replace(/\s+/g, "_");
 
-    /* === OPRAVA: filtr senzorů v lowercase === */
     const sensorEntities = Object.keys(hass.states)
       .filter(e => e.startsWith("sensor." + prefix + "_"))
       .filter(e => {
@@ -233,7 +249,6 @@ class PocasiMeteoCard extends HTMLElement {
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
 
-      /* === OPRAVA: odstranění prefixu GAR632 === */
       const rawName = s.attributes.friendly_name || sensor;
       const cleanName = rawName.replace(/^[A-Za-z0-9_]+\s+/, "");
 
@@ -314,7 +329,9 @@ class PocasiMeteoCard extends HTMLElement {
       const color = COLOR_MAP[suffix] || "#3b82f6";
       const rgba = this._hexToRgba(color, 0.25);
 
-      canvas.getBoundingClientRect();
+      /* === Fallbacky pro mobilní aplikaci === */
+      const textColor = safeCssVar(this.shadowRoot.host, "--primary-text-color", "#ffffff");
+      const bgColor = safeCssVar(this.shadowRoot.host, "--ha-card-background", "#1c1c1c");
 
       this._charts[sensor] = new Chart(ctx, {
         type: "line",
@@ -354,12 +371,8 @@ class PocasiMeteoCard extends HTMLElement {
           plugins: {
             legend: {
               labels: {
-                color: getComputedStyle(this._root || this.shadowRoot.host).getPropertyValue("--primary-text-color").trim(),
+                color: textColor,
                 generateLabels(chart) {
-                  const textColor = getComputedStyle(this._root || this.shadowRoot.host)
-                    .getPropertyValue("--primary-text-color")
-                    .trim();
-
                   return [
                     {
                       text: cleanName,
@@ -388,8 +401,8 @@ class PocasiMeteoCard extends HTMLElement {
             }
           },
           scales: {
-            x: { type: "time", time: { unit: "hour" }, title: { display: false } },
-            y: { title: { display: false } }
+            x: { type: "time", time: { unit: "hour" }, ticks: { color: textColor } },
+            y: { ticks: { color: textColor } }
           }
         }
       });
