@@ -90,7 +90,6 @@ class PocasiMeteoCard extends HTMLElement {
       this._initialized = true;
     }
 
-    /* === SPRÁVNÁ KONTROLA BACKENDU (varianta A) === */
     if (!entity || !entity.attributes || !("TeplotaVnejsi" in entity.attributes)) {
       const card = this.shadowRoot.querySelector(".pm-card");
       if (card) {
@@ -105,8 +104,6 @@ class PocasiMeteoCard extends HTMLElement {
       return;
     }
 
-    /* === původní funkční logika === */
-
     if (!this._updateInterval) {
       const entryId = entity.attributes.config_entry_id;
       if (entryId) {
@@ -120,7 +117,6 @@ class PocasiMeteoCard extends HTMLElement {
       } else {
         this._updateInterval = 60;
       }
-      /* NEVRACÍME SE – necháme kartu pokračovat */
     }
 
     const refresh = this._updateInterval || 60;
@@ -243,6 +239,7 @@ class PocasiMeteoCard extends HTMLElement {
       canvas.height = 200;
 
       tile.appendChild(title);
+      tile.appendChild(canvas);   // ← oprava: canvas musí být v DOM před inicializací grafu
       graphs.appendChild(tile);
 
       canvases[sensor] = { canvas, tile };
@@ -314,8 +311,7 @@ class PocasiMeteoCard extends HTMLElement {
       const mm = document.createElement("div");
       mm.classList.add("pm-minmax");
       mm.textContent = `Min: ${min.toFixed(1)} — Max: ${max.toFixed(1)}`;
-      tile.appendChild(mm);
-      tile.appendChild(canvas);
+      tile.appendChild(mm);   // canvas už je v DOM, jen přidáme min/max
 
       this._charts[sensor] = new Chart(ctx, {
         type: "line",
