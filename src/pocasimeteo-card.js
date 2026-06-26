@@ -1,4 +1,4 @@
-/*  =======  POCASIMETEO CARD – FINÁLNÍ FUNKČNÍ VERZE  =======  */
+/*  =======  POCASIMETEO CARD – VERZE S UPRAVENOU LEGENDOU A NADPISY  =======  */
 
 import {
   Chart,
@@ -25,7 +25,7 @@ Chart.register(
   Legend
 );
 
-/* === OPRAVA: VALID_SENSORS v lowercase === */
+/* === VALID_SENSORS v lowercase === */
 const VALID_SENSORS = [
   "teplotavnejsi",
   "vlhkostvnejsi",
@@ -153,7 +153,6 @@ class PocasiMeteoCard extends HTMLElement {
         .pm-graphs { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; margin-top:8px; }
         .pm-graph-tile { background:var(--ha-card-background,#fff); border-radius:12px; padding:12px; box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display:flex; flex-direction:column; }
         .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; }
-        .pm-minmax { font-size:0.9em; opacity:0.7; margin-bottom:6px; }
         .pm-graph { width:100%; height:200px; }
       </style>
 
@@ -233,11 +232,14 @@ class PocasiMeteoCard extends HTMLElement {
 
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
-      const name = (s.attributes.friendly_name || sensor) + (unit ? " - " + unit : "");
+
+      /* === OPRAVA: odstranění prefixu GAR632 === */
+      const rawName = s.attributes.friendly_name || sensor;
+      const cleanName = rawName.replace(/^[A-Za-z0-9_]+\s+/, "");
 
       const title = document.createElement("div");
       title.classList.add("pm-graph-title");
-      title.textContent = name;
+      title.textContent = cleanName + (unit ? " - " + unit : "");
 
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
@@ -247,7 +249,7 @@ class PocasiMeteoCard extends HTMLElement {
       tile.appendChild(canvas);
       graphs.appendChild(tile);
 
-      canvases[sensor] = { canvas, tile };
+      canvases[sensor] = { canvas, tile, cleanName };
     }
 
     const history = {};
@@ -297,7 +299,6 @@ class PocasiMeteoCard extends HTMLElement {
 
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
-      const name = (s.attributes.friendly_name || sensor) + (unit ? " - " + unit : "");
 
       const min = Math.min(...points.map(p => p.y));
       const max = Math.max(...points.map(p => p.y));
@@ -305,18 +306,13 @@ class PocasiMeteoCard extends HTMLElement {
       const minPoint = points.find(p => p.y === min);
       const maxPoint = points.find(p => p.y === max);
 
-      const { canvas, tile } = canvases[sensor];
+      const { canvas, tile, cleanName } = canvases[sensor];
       const ctx = canvas.getContext("2d");
 
       if (this._charts[sensor]) this._charts[sensor].destroy();
 
       const color = COLOR_MAP[suffix] || "#3b82f6";
       const rgba = this._hexToRgba(color, 0.25);
-
-      const mm = document.createElement("div");
-      mm.classList.add("pm-minmax");
-      mm.textContent = `Min: ${min.toFixed(1)} — Max: ${max.toFixed(1)}`;
-      tile.appendChild(mm);
 
       canvas.getBoundingClientRect();
 
@@ -325,7 +321,7 @@ class PocasiMeteoCard extends HTMLElement {
         data: {
           datasets: [
             {
-              label: name,
+              label: cleanName,
               data: points,
               borderColor: color,
               backgroundColor: rgba,
@@ -335,7 +331,7 @@ class PocasiMeteoCard extends HTMLElement {
               order: 1
             },
             {
-              label: "Min",
+              label: `Min: ${min.toFixed(1)}`,
               data: [{ x: minPoint.x, y: minPoint.y }],
               pointRadius: 6,
               pointBackgroundColor: "red",
@@ -343,7 +339,7 @@ class PocasiMeteoCard extends HTMLElement {
               order: 99
             },
             {
-              label: "Max",
+              label: `Max: ${max.toFixed(1)}`,
               data: [{ x: maxPoint.x, y: maxPoint.y }],
               pointRadius: 6,
               pointBackgroundColor: "green",
@@ -355,6 +351,34 @@ class PocasiMeteoCard extends HTMLElement {
         options: {
           responsive: false,
           maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: {
+                generateLabels(chart) {
+                  return [
+                    {
+                      text: cleanName,
+                      fillStyle: color,
+                      strokeStyle: color,
+                      lineWidth: 2
+                    },
+                    {
+                      text: `Min: ${min.toFixed(1)}`,
+                      fillStyle: "red",
+                      strokeStyle: "red",
+                      lineWidth: 2
+                    },
+                    {
+                      text: `Max: ${max.toFixed(1)}`,
+                      fillStyle: "green",
+                      strokeStyle: "green",
+                      lineWidth: 2
+                    }
+                  ];
+                }
+              }
+            }
+          },
           scales: {
             x: { type: "time", time: { unit: "hour" }, title: { display: false } },
             y: { title: { display: false } }
