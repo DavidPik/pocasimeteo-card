@@ -3,11 +3,11 @@ name: Build & Release PočasíMeteo Card
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag release (např. v6.0.1)"
+      oznaceni_verze:
+        description: "Označení verze (např. 6.0.56)"
         required: true
-      name:
-        description: "Název release"
+      release_notes:
+        description: "Release notes"
         required: true
 
 permissions:
@@ -29,11 +29,20 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Prepare version variables
+        id: vars
+        run: |
+          VERSION="${{ github.event.inputs.oznaceni_verze }}"
+          TAG="v${VERSION}"
+          NAME="Počasí Meteo Card – ${VERSION}"
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "name=${NAME}" >> $GITHUB_OUTPUT
+
       - name: Sync version to package.json
         run: |
-          TAG="${{ github.event.inputs.tag }}"
-          VERSION="${TAG#v}"
-          jq ".version = \"$VERSION\"" package.json > package.tmp.json
+          jq ".version = \"${{ steps.vars.outputs.version }}\"" package.json > package.tmp.json
           mv package.tmp.json package.json
 
       - name: Commit updated package.json
@@ -41,7 +50,7 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add package.json
-          git commit -m "Update version to ${{ github.event.inputs.tag }}"
+          git commit -m "Update version to ${{ steps.vars.outputs.tag }}"
           git push
 
       - name: Download Chart.js + adapter
@@ -56,8 +65,9 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          name: ${{ github.event.inputs.name }}
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: ${{ steps.vars.outputs.name }}
+          body: ${{ github.event.inputs.release_notes }}
           files: dist/pocasimeteo-card.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
