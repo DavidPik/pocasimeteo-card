@@ -48,6 +48,7 @@ const NON_GRAPH_SENSORS = [
   "vitrsmer"
 ];
 
+/* === COLOR_MAP musí být OBJEKT, nikoli pole === */
 const COLOR_MAP = {
   TeplotaVnejsi: "#ff5722",
   VlhkostVnejsi: "#2196f3",
@@ -63,7 +64,7 @@ const COLOR_MAP = {
   Pm1: "#7e57c2",
   Pm2: "#5e35b1",
   Pm1v: "#9575cd"
-];
+};
 
 /* === FUNKCE: bezpečné čtení CSS proměnných s fallbackem === */
 function safeCssVar(el, name, fallback) {
