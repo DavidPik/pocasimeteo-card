@@ -354,25 +354,33 @@ class PocasiMeteoCard extends HTMLElement {
           plugins: {
             legend: {
               labels: {
+                color: getComputedStyle(this._root || this.shadowRoot.host).getPropertyValue("--primary-text-color").trim(),
                 generateLabels(chart) {
+                  const textColor = getComputedStyle(this._root || this.shadowRoot.host)
+                    .getPropertyValue("--primary-text-color")
+                    .trim();
+
                   return [
                     {
                       text: cleanName,
                       fillStyle: color,
                       strokeStyle: color,
-                      lineWidth: 2
+                      lineWidth: 2,
+                      fontColor: textColor
                     },
                     {
                       text: `Min: ${min.toFixed(1)}`,
                       fillStyle: "red",
                       strokeStyle: "red",
-                      lineWidth: 2
+                      lineWidth: 2,
+                      fontColor: textColor
                     },
                     {
                       text: `Max: ${max.toFixed(1)}`,
                       fillStyle: "green",
                       strokeStyle: "green",
-                      lineWidth: 2
+                      lineWidth: 2,
+                      fontColor: textColor
                     }
                   ];
                 }
