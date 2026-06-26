@@ -25,26 +25,27 @@ Chart.register(
   Legend
 );
 
+/* === OPRAVA: VALID_SENSORS v lowercase === */
 const VALID_SENSORS = [
-  "TeplotaVnejsi",
-  "VlhkostVnejsi",
-  "TlakRel",
-  "Vitr",
-  "VitrNarazy",
-  "rainIntensity",
-  "SlunZareni",
-  "UVindex",
-  "TeplotaVnitrni",
-  "VlhkostVnitrni",
-  "Co2",
-  "Pm1",
-  "Pm2",
-  "Pm1v"
+  "teplotavnejsi",
+  "vlhkostvnejsi",
+  "tlakrel",
+  "vitr",
+  "vitrnarazy",
+  "rainintensity",
+  "slunzareni",
+  "uvindex",
+  "teplotavnitrni",
+  "vlhkostvnitrni",
+  "co2",
+  "pm1",
+  "pm2",
+  "pm1v"
 ];
 
 const NON_GRAPH_SENSORS = [
-  "SrazkyDen",
-  "VitrSmer"
+  "srazkyden",
+  "vitrsmer"
 ];
 
 const COLOR_MAP = {
@@ -177,9 +178,13 @@ class PocasiMeteoCard extends HTMLElement {
       .toLowerCase()
       .replace(/\s+/g, "_");
 
+    /* === OPRAVA: filtr senzorů v lowercase === */
     const sensorEntities = Object.keys(hass.states)
       .filter(e => e.startsWith("sensor." + prefix + "_"))
-      .filter(e => VALID_SENSORS.includes(e.replace("sensor." + prefix + "_", "")));
+      .filter(e => {
+        const suffix = e.replace("sensor." + prefix + "_", "").toLowerCase();
+        return VALID_SENSORS.includes(suffix);
+      });
 
     const header = this.shadowRoot.getElementById("header");
     const temp = this.shadowRoot.getElementById("temp");
@@ -248,7 +253,7 @@ class PocasiMeteoCard extends HTMLElement {
     const history = {};
 
     await Promise.all(sensorEntities.map(async sensor => {
-      const suffix = sensor.replace("sensor." + prefix + "_", "");
+      const suffix = sensor.replace("sensor." + prefix + "_", "").toLowerCase();
       if (NON_GRAPH_SENSORS.includes(suffix)) return;
 
       const url =
@@ -275,7 +280,7 @@ class PocasiMeteoCard extends HTMLElement {
     }));
 
     for (const sensor of sensorEntities) {
-      const suffix = sensor.replace("sensor." + prefix + "_", "");
+      const suffix = sensor.replace("sensor." + prefix + "_", "").toLowerCase();
       if (NON_GRAPH_SENSORS.includes(suffix)) continue;
 
       if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
@@ -313,8 +318,7 @@ class PocasiMeteoCard extends HTMLElement {
       mm.textContent = `Min: ${min.toFixed(1)} — Max: ${max.toFixed(1)}`;
       tile.appendChild(mm);
 
-      /* === VARIANTA B: FORCE LAYOUT === */
-      canvas.getBoundingClientRect();  // ← vynutí layout před inicializací grafu
+      canvas.getBoundingClientRect();
 
       this._charts[sensor] = new Chart(ctx, {
         type: "line",
