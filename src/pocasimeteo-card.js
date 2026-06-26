@@ -1,4 +1,4 @@
-/*  =======  POCASIMETEO CARD – VERZE S OPRAVOU PRO MOBILNÍ APLIKACI  =======  */
+/*  =======  POCASIMETEO CARD – VERZE S OPRAVOU PRO MOBILNÍ APLIKACI A TÉMATA  =======  */
 
 import {
   Chart,
@@ -63,7 +63,7 @@ const COLOR_MAP = {
   Pm1: "#7e57c2",
   Pm2: "#5e35b1",
   Pm1v: "#9575cd"
-};
+];
 
 /* === FUNKCE: bezpečné čtení CSS proměnných s fallbackem === */
 function safeCssVar(el, name, fallback) {
@@ -73,6 +73,12 @@ function safeCssVar(el, name, fallback) {
   } catch {
     return fallback;
   }
+}
+
+/* === FUNKCE: detekce světlého/tmavého tématu === */
+function isLightTheme(el) {
+  const b = safeCssVar(el, "--brightness", "0");
+  return b.trim() === "1";
 }
 
 class PocasiMeteoCard extends HTMLElement {
@@ -329,9 +335,19 @@ class PocasiMeteoCard extends HTMLElement {
       const color = COLOR_MAP[suffix] || "#3b82f6";
       const rgba = this._hexToRgba(color, 0.25);
 
-      /* === Fallbacky pro mobilní aplikaci === */
-      const textColor = safeCssVar(this.shadowRoot.host, "--primary-text-color", "#ffffff");
-      const bgColor = safeCssVar(this.shadowRoot.host, "--ha-card-background", "#1c1c1c");
+      /* === Fallbacky pro mobilní aplikaci + detekce tématu === */
+      const host = this.shadowRoot.host;
+
+      const textColor =
+        safeCssVar(host, "--primary-text-color", "") ||
+        (isLightTheme(host) ? "#000000" : "#ffffff");
+
+      const bgColor =
+        safeCssVar(host, "--ha-card-background", "") ||
+        safeCssVar(host, "--card-background-color", "") ||
+        (isLightTheme(host) ? "#ffffff" : "#1c1c1c");
+
+      canvas.style.backgroundColor = bgColor;
 
       this._charts[sensor] = new Chart(ctx, {
         type: "line",
