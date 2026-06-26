@@ -1,5 +1,3 @@
-/*  =======  POCASIMETEO CARD – FINÁLNÍ FUNKČNÍ VERZE  =======  */
-
 import {
   Chart,
   LineController,
@@ -25,45 +23,6 @@ Chart.register(
   Legend
 );
 
-const VALID_SENSORS = [
-  "TeplotaVnejsi",
-  "VlhkostVnejsi",
-  "TlakRel",
-  "Vitr",
-  "VitrNarazy",
-  "rainIntensity",
-  "SlunZareni",
-  "UVindex",
-  "TeplotaVnitrni",
-  "VlhkostVnitrni",
-  "Co2",
-  "Pm1",
-  "Pm2",
-  "Pm1v"
-];
-
-const NON_GRAPH_SENSORS = [
-  "SrazkyDen",
-  "VitrSmer"
-];
-
-const COLOR_MAP = {
-  TeplotaVnejsi: "#ff5722",
-  VlhkostVnejsi: "#2196f3",
-  TlakRel: "#9c27b0",
-  Vitr: "#4caf50",
-  VitrNarazy: "#2e7d32",
-  rainIntensity: "#03a9f4",
-  SlunZareni: "#ff9800",
-  UVindex: "#ffeb3b",
-  TeplotaVnitrni: "#ff7043",
-  VlhkostVnitrni: "#42a5f5",
-  Co2: "#8d6e63",
-  Pm1: "#7e57c2",
-  Pm2: "#5e35b1",
-  Pm1v: "#9575cd"
-};
-
 class PocasiMeteoCard extends HTMLElement {
   constructor() {
     super();
@@ -73,7 +32,6 @@ class PocasiMeteoCard extends HTMLElement {
     this._lastAttributes = null;
     this._lastRender = 0;
     this._updateInterval = null;
-    this._lastFetch = 0;
   }
 
   setConfig(config) {
@@ -83,40 +41,31 @@ class PocasiMeteoCard extends HTMLElement {
   }
 
   set hass(hass) {
-    const entity = hass.states[this.config.entity];
-
     if (!this._initialized) {
       this._initialize();
       this._initialized = true;
     }
 
-    if (!entity || !entity.attributes || !("TeplotaVnejsi" in entity.attributes)) {
-      const card = this.shadowRoot.querySelector(".pm-card");
-      if (card) {
-        card.innerHTML = `
-          <h2>PočasíMeteo</h2>
-          <p style="opacity:0.7;">
-            Backendová komponenta <b>pocasimeteo</b> není dostupná.<br>
-            Zkontroluj, zda je integrace nainstalovaná a aktivní.
-          </p>
-        `;
-      }
-      return;
-    }
+    const entity = hass.states[this.config.entity];
+    if (!entity) return;
 
+    // Load update_interval once
     if (!this._updateInterval) {
       const entryId = entity.attributes.config_entry_id;
       if (entryId) {
         hass.callApi("GET", `config/config_entries/entry/${entryId}`)
           .then(entry => {
             this._updateInterval = entry.data.update_interval || 60;
+            console.log("Loaded update_interval:", this._updateInterval);
           })
           .catch(() => {
             this._updateInterval = 60;
+            console.warn("Failed to load update_interval, using 60s");
           });
       } else {
         this._updateInterval = 60;
       }
+      return; // wait for interval
     }
 
     const refresh = this._updateInterval || 60;
@@ -144,16 +93,54 @@ class PocasiMeteoCard extends HTMLElement {
   _initialize() {
     this.shadowRoot.innerHTML = `
       <style>
-        .pm-card { padding:16px; color:var(--primary-text-color); display:flex; flex-direction:column; gap:16px; }
-        .pm-header { display:flex; justify-content:space-between; font-size:20px; font-weight:600; }
-        .pm-condition { opacity:0.7; font-size:14px; }
-        .pm-temp { font-size:64px; font-weight:300; }
-        .pm-current { display:flex; flex-wrap:wrap; gap:16px; opacity:0.8; font-size:16px; }
-        .pm-graphs { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; margin-top:8px; }
-        .pm-graph-tile { background:var(--ha-card-background,#fff); border-radius:12px; padding:12px; box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display:flex; flex-direction:column; }
-        .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; }
-        .pm-minmax { font-size:0.9em; opacity:0.7; margin-bottom:6px; }
-        .pm-graph { width:100%; height:200px; }
+        .pm-card {
+          padding: 16px;
+          color: var(--primary-text-color);
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .pm-header {
+          display: flex;
+          justify-content: space-between;
+          font-size: 20px;
+          font-weight: 600;
+        }
+
+        .pm-condition {
+          opacity: 0.7;
+          font-size: 14px;
+        }
+
+        .pm-temp {
+          font-size: 64px;
+          font-weight: 300;
+        }
+
+        .pm-current {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 16px;
+          opacity: 0.8;
+          font-size: 16px;
+        }
+
+        .pm-graphs {
+          display: grid;
+          gap: 16px;
+        }
+
+        @media (min-width: 900px) {
+          .pm-graphs {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+        .pm-graph {
+          width: 100%;
+          height: 200px;
+        }
       </style>
 
       <ha-card class="pm-card">
@@ -169,17 +156,27 @@ class PocasiMeteoCard extends HTMLElement {
     const entity = hass.states[this.config.entity];
     if (!entity) return;
 
-    const nowTs = Date.now();
-    if (nowTs - this._lastFetch < 30000) return;
-    this._lastFetch = nowTs;
-
-    const prefix = (entity.attributes.station_name || "")
+    // Získáme prefix senzorů z atributu station_name
+    const weatherEntity = hass.states[this.config.entity];
+    const prefix = (weatherEntity?.attributes?.station_name || "")
       .toLowerCase()
       .replace(/\s+/g, "_");
 
+    console.log("Detected prefix:", prefix);
+
+    // Najdeme všechny senzory s tímto prefixem, které mají číselnou hodnotu
     const sensorEntities = Object.keys(hass.states)
       .filter(e => e.startsWith("sensor." + prefix + "_"))
-      .filter(e => VALID_SENSORS.includes(e.replace("sensor." + prefix + "_", "")));
+      .filter(e => {
+        const st = hass.states[e].state;
+        return st !== "unknown" &&
+               st !== "unavailable" &&
+               st !== null &&
+               st !== undefined &&
+               !isNaN(Number(st));
+      });
+
+    console.log("Detected sensors:", sensorEntities);
 
     const header = this.shadowRoot.getElementById("header");
     const temp = this.shadowRoot.getElementById("temp");
@@ -187,10 +184,13 @@ class PocasiMeteoCard extends HTMLElement {
     const graphs = this.shadowRoot.getElementById("graphs");
 
     const d = entity.attributes;
-
+    
     header.innerHTML = `
       <div class="pm-header">
-        <div>${d.station_name}<br><span class="pm-condition">${d.condition || ""}</span></div>
+        <div>
+          ${d.station_name}<br>
+          <span class="pm-condition">${d.condition || ""}</span>
+        </div>
         <div style="opacity:0.6;">${d.timestamp}</div>
       </div>
     `;
@@ -199,63 +199,64 @@ class PocasiMeteoCard extends HTMLElement {
 
     current.innerHTML = `
       <div>Vlhkost: ${d.VlhkostVnejsi}%</div>
-      <div>Tlak: ${d.TlakRel || ""} hPa</div>
-      <div>Vítr: ${d.Vitr} m/s (${d.VitrSmer || ""})</div>
-      <div>Srážky dnes: ${d.SrazkyDen || 0} mm</div>
-      <div>Intenzita srážek: ${d.rainIntensity || 0} mm/5min</div>
+      <div>Tlak: ${d.TlakRel || d.Tlak || ""} hPa</div>
+      <div>Vítr: ${d.Vitr} m/s (${d.SmerVetra || ""})</div>
+      <div>Srážky: ${d.SrazkyDen || d.Srazky || 0} mm</div>
     `;
 
     graphs.innerHTML = "";
 
-    if (sensorEntities.length === 0) return;
+    if (sensorEntities.length === 0) {
+      console.warn("No sensors found");
+      return;
+    }
 
+    // Robust token handling
     const token =
       hass.connection?.options?.accessToken ||
       hass.auth?.data?.access_token ||
       hass.connection?.options?.auth?.access_token ||
       null;
 
-    if (!token) return;
+    console.log("Token:", token ? "OK" : "MISSING");
 
-    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    if (!token) {
+      console.warn("Token not ready, skipping update");
+      return;
+    }
+
+    const now = new Date();
+    const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
 
     const canvases = {};
     for (const sensor of sensorEntities) {
-      const suffix = sensor.replace("sensor." + prefix + "_", "");
-
-      const tile = document.createElement("div");
-      tile.classList.add("pm-graph-tile");
-
-      const s = hass.states[sensor];
-      const unit = s.attributes.unit_of_measurement || "";
-      const name = (s.attributes.friendly_name || sensor) + (unit ? " - " + unit : "");
-
-      const title = document.createElement("div");
-      title.classList.add("pm-graph-title");
-      title.textContent = name;
-
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
+
+      // Správné nastavení velikosti canvasu
+      // 1) bitmapová výška
       canvas.height = 200;
 
-      tile.appendChild(title);
-      tile.appendChild(canvas);   // ← oprava: canvas musí být v DOM před inicializací grafu
-      graphs.appendChild(tile);
+      // 2) CSS výška a šířka — MUSÍ být nastaveny před vložením do DOM
+      canvas.style.setProperty("height", "200px");
+      canvas.style.setProperty("width", "100%");
 
-      canvases[sensor] = { canvas, tile };
+      // 3) vložit až po nastavení stylů
+      graphs.appendChild(canvas);
+
+      canvases[sensor] = canvas;
     }
 
     const history = {};
 
     await Promise.all(sensorEntities.map(async sensor => {
-      const suffix = sensor.replace("sensor." + prefix + "_", "");
-      if (NON_GRAPH_SENSORS.includes(suffix)) return;
-
       const url =
         `/api/history/period/${since}` +
         `?filter_entity_id=${sensor}` +
         `&minimal_response` +
         `&significant_changes_only=false`;
+
+      console.log("History URL:", url);
 
       try {
         const resp = await fetch(url, {
@@ -268,50 +269,88 @@ class PocasiMeteoCard extends HTMLElement {
           credentials: "same-origin"
         });
 
+        console.log("History status for", sensor, resp.status);
+
         if (resp.ok) {
           history[sensor] = await resp.json();
+          console.log("History data for", sensor, history[sensor]);
+        } else {
+          console.warn("History fetch failed", sensor, resp.status);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error("Fetch error", sensor, e);
+      }
     }));
 
     for (const sensor of sensorEntities) {
-      const suffix = sensor.replace("sensor." + prefix + "_", "");
-      if (NON_GRAPH_SENSORS.includes(suffix)) continue;
-
-      if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
+      if (
+        !history[sensor] ||
+        !history[sensor][0] ||
+        !Array.isArray(history[sensor][0]) ||
+        history[sensor][0].length === 0
+      ) {
+        console.warn("Sensor has no history, skipping:", sensor);
+        continue;
+      }
 
       const raw = history[sensor][0];
-      const points = raw
-        .map(p => ({
-          x: Date.parse(p.last_changed),
-          y: Number(p.state)
-        }))
-        .filter(p => !isNaN(p.x) && !isNaN(p.y));
 
-      if (points.length < 2) continue;
+      const points = [];
+
+      for (const p of raw) {
+        const ts = Date.parse(p.last_changed);
+        const raw = p.state;
+
+        // ignorujeme nečíselné hodnoty
+        if (
+          raw === null ||
+          raw === undefined ||
+          raw === "" ||
+          raw === "unknown" ||
+          raw === "unavailable" ||
+          raw === "None" ||
+          raw === "nan"
+        ) {
+          console.warn("Skipping non-numeric state:", raw);
+          continue;
+        }
+
+        const val = Number(raw);
+        if (isNaN(val)) {
+          console.warn("Skipping NaN value:", raw);
+          continue;
+        }
+
+        if (isNaN(ts)) {
+          console.warn("Skipping invalid timestamp:", p.last_changed);
+          continue;
+        }
+
+        points.push({ x: ts, y: val });
+      }
+
+      console.log("Points for", sensor, points.length);
+
+      if (points.length < 2) {
+        console.warn("Not enough points for", sensor);
+        continue;
+      }
 
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
-      const name = (s.attributes.friendly_name || sensor) + (unit ? " - " + unit : "");
+      const name = s.attributes.friendly_name || sensor;
 
       const min = Math.min(...points.map(p => p.y));
       const max = Math.max(...points.map(p => p.y));
 
-      const minPoint = points.find(p => p.y === min);
-      const maxPoint = points.find(p => p.y === max);
-
-      const { canvas, tile } = canvases[sensor];
+      const canvas = canvases[sensor];
       const ctx = canvas.getContext("2d");
 
-      if (this._charts[sensor]) this._charts[sensor].destroy();
+      if (this._charts[sensor]) {
+        this._charts[sensor].destroy();
+      }
 
-      const color = COLOR_MAP[suffix] || "#3b82f6";
-      const rgba = this._hexToRgba(color, 0.25);
-
-      const mm = document.createElement("div");
-      mm.classList.add("pm-minmax");
-      mm.textContent = `Min: ${min.toFixed(1)} — Max: ${max.toFixed(1)}`;
-      tile.appendChild(mm);   // canvas už je v DOM, jen přidáme min/max
+      console.log("Drawing chart for", sensor);
 
       this._charts[sensor] = new Chart(ctx, {
         type: "line",
@@ -320,51 +359,57 @@ class PocasiMeteoCard extends HTMLElement {
             {
               label: name,
               data: points,
-              borderColor: color,
-              backgroundColor: rgba,
+              borderColor: "#3b82f6",
+              backgroundColor: "rgba(59,130,246,0.2)",
               tension: 0.3,
-              pointRadius: 0,
-              borderWidth: 2,
-              order: 1
+              pointRadius: 0
             },
             {
               label: "Min",
-              data: [{ x: minPoint.x, y: minPoint.y }],
+              data: [{ x: points.find(p => p.y === min).x, y: min }],
               pointRadius: 6,
               pointBackgroundColor: "red",
-              showLine: false,
-              order: 99
+              showLine: false
             },
             {
               label: "Max",
-              data: [{ x: maxPoint.x, y: maxPoint.y }],
+              data: [{ x: points.find(p => p.y === max).x, y: max }],
               pointRadius: 6,
               pointBackgroundColor: "green",
-              showLine: false,
-              order: 99
+              showLine: false
             }
           ]
-        },
+        },       
         options: {
-          responsive: false,
+          responsive: true,
           maintainAspectRatio: false,
           scales: {
-            x: { type: "time", time: { unit: "hour" }, title: { display: false } },
-            y: { title: { display: false } }
+            x: {
+              type: "time",
+              time: { unit: "hour" },
+              adapters: { date: {} },
+              title: { display: true, text: "Čas" }
+            },
+            y: {
+              title: { display: true, text: unit }
+            }
           }
         }
       });
+ 
+      // Donutíme Chart.js přepočítat layout po vytvoření grafu
+      setTimeout(() => {
+        if (this._charts[sensor]) {
+          this._charts[sensor].resize();
+        }
+      }, 0);
+ 
     }
   }
 
-  _hexToRgba(hex, alpha) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  getCardSize() {
+    return 6;
   }
-
-  getCardSize() { return 6; }
 }
 
 customElements.define("pocasimeteo-card", PocasiMeteoCard);
