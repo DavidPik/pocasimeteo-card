@@ -208,7 +208,7 @@ class PocasiMeteoCard extends HTMLElement {
         .pm-graph-tile { 
           background:var(--ha-card-background,#1c1c1c); 
           border-radius:12px; 
-          padding:12px; 
+          padding:6px; 
           box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); 
           display:flex; 
           flex-direction:column; 
@@ -525,7 +525,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.45;
+            ) * 0.50;
 
             ctx.save();
             ctx.fillStyle = textColor;
@@ -537,8 +537,8 @@ class PocasiMeteoCard extends HTMLElement {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
 
               // Popisky dáme dál od středu
-              const x = cx + Math.cos(angle) * (radius + 32);
-              const y = cy + Math.sin(angle) * (radius + 32);
+              const x = cx + Math.cos(angle) * (radius + 24);
+              const y = cy + Math.sin(angle) * (radius + 24);
 
               ctx.fillText(label, x, y);
             });
@@ -559,7 +559,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.45;
+            ) * 0.50;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -614,10 +614,10 @@ class PocasiMeteoCard extends HTMLElement {
             maintainAspectRatio: false,
             layout: {
               padding: {
-                top: 50,
-                bottom: 40,
-                left: 20,
-                right: 20
+                top: 20,
+                bottom: 30,
+                left: 10,
+                right: 10
               }
             },
             scales: {
@@ -634,7 +634,7 @@ class PocasiMeteoCard extends HTMLElement {
                   padding: 42,
                   boxWidth: 20,
                   font: {
-                    size: 14,
+                    size: 12,
                     color: textColor
                   },
                   generateLabels(chart) {
