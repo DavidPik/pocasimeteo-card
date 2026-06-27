@@ -521,7 +521,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.35;
+            ) * 0.42;
 
             ctx.save();
             ctx.fillStyle = chart.options.plugins.legend.labels.color;
@@ -555,7 +555,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.35;
+            ) * 0.42;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -608,6 +608,14 @@ class PocasiMeteoCard extends HTMLElement {
           options: {
             responsive: false,
             maintainAspectRatio: false,
+            layout: {
+              padding: {
+                top: 50,
+                bottom: 20,
+                left: 20,
+                right: 20
+              }
+            },
             scales: {
               r: {
                 ticks: { display: false },
@@ -621,6 +629,10 @@ class PocasiMeteoCard extends HTMLElement {
                   color: textColor,
                   padding: 20,
                   boxWidth: 20,
+                  font: {
+                    size: 14,
+                    color: textcolor
+                  }
                   generateLabels(chart) {
                     return [
                       {
