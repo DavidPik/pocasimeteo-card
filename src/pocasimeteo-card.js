@@ -632,7 +632,7 @@ class PocasiMeteoCard extends HTMLElement {
                   font: {
                     size: 14,
                     color: textcolor
-                  }
+                  },
                   generateLabels(chart) {
                     return [
                       {
