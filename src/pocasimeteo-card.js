@@ -214,7 +214,7 @@ class PocasiMeteoCard extends HTMLElement {
           flex-direction:column; 
         }
         .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; color:var(--primary-text-color,#fff); }
-        .pm-graph { width:100%; height:220px; }
+        .pm-graph { width:100%; height:260px; }
       </style>
 
       <ha-card class="pm-card">
@@ -308,7 +308,7 @@ class PocasiMeteoCard extends HTMLElement {
 
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
-      canvas.height = 220;
+      canvas.height = 260;
 
       tile.appendChild(title);
       tile.appendChild(canvas);
@@ -431,6 +431,10 @@ class PocasiMeteoCard extends HTMLElement {
               labels: {
                 color: textColor,
                 padding: 12,
+                font: {
+                  size: 14,
+                  color: textColor
+                },
                 generateLabels(chart) {
                   return [
                     {
@@ -521,7 +525,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.48;
+            ) * 0.50;
 
             ctx.save();
             ctx.fillStyle = chart.options.plugins.legend.labels.color;
@@ -533,8 +537,8 @@ class PocasiMeteoCard extends HTMLElement {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
 
               // Popisky dáme dál od středu
-              const x = cx + Math.cos(angle) * (radius + 40);
-              const y = cy + Math.sin(angle) * (radius + 40);
+              const x = cx + Math.cos(angle) * (radius + 46);
+              const y = cy + Math.sin(angle) * (radius + 46);
 
               ctx.fillText(label, x, y);
             });
@@ -555,7 +559,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.48;
+            ) * 0.50;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -627,8 +631,8 @@ class PocasiMeteoCard extends HTMLElement {
                 position: "bottom",
                 labels: {
                   color: textColor,
-                  padding: 36,
-                  boxWidth: 20,
+                  padding: 42,
+                  boxWidth: 28,
                   font: {
                     size: 14,
                     color: textColor
