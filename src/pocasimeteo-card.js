@@ -119,17 +119,6 @@ function buildWindRose(points) {
   return bins;
 }
 
-/* === FUNKCE: výseč variability === */
-function buildVarSector(avgDeg, varDeg) {
-  const avgIdx = directionToIndex(avgDeg);
-  const span = Math.round(varDeg / 22.5);
-  const indices = [];
-  for (let i = -span; i <= span; i++) {
-    indices.push((avgIdx + i + 16) % 16);
-  }
-  return indices;
-}
-
 class PocasiMeteoCard extends HTMLElement {
   constructor() {
     super();
@@ -351,8 +340,10 @@ class PocasiMeteoCard extends HTMLElement {
       } catch (e) {}
     }));
 
+    // Nejprve všechny standardní grafy (bez vitrsmer)
     for (const sensor of sensorEntities) {
       const suffix = sensor.replace("sensor." + prefix + "_", "").toLowerCase();
+      if (suffix === "vitrsmer") continue;
       if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
 
       const raw = history[sensor][0];
@@ -387,59 +378,6 @@ class PocasiMeteoCard extends HTMLElement {
 
       canvas.style.backgroundColor = bgColor;
       tile.style.backgroundColor = bgColor;
-
-      /* === WINDROSE PRO VITRSMER === */
-      if (suffix === "vitrsmer") {
-        const bins = buildWindRose(points);
-
-        const avg = Number(entity.attributes.VitrSmer_avg || 0);
-        const mode = Number(entity.attributes.VitrSmer_mode || 0);
-        const vari = Number(entity.attributes.VitrSmer_var || 0);
-
-        const avgIdx = directionToIndex(avg);
-        const modeIdx = directionToIndex(mode);
-        const varSector = buildVarSector(avg, vari);
-
-        const baseColor = "#4caf50";
-        const highlightAvg = "#ff0000";
-        const highlightMode = "#0000ff";
-        const highlightVar = "rgba(255,165,0,0.5)";
-
-        const backgroundColors = bins.map((_, idx) => {
-          if (idx === avgIdx) return highlightAvg;
-          if (idx === modeIdx) return highlightMode;
-          if (varSector.includes(idx)) return highlightVar;
-          return baseColor;
-        });
-
-        this._charts[sensor] = new Chart(ctx, {
-          type: "polarArea",
-          data: {
-            labels: WIND_DIR_LABELS,
-            datasets: [{
-              label: cleanName,
-              data: bins,
-              backgroundColor: backgroundColors,
-              borderWidth: 1
-            }]
-          },
-          options: {
-            scales: {
-              r: {
-                ticks: { display: false },
-                grid: { color: "rgba(255,255,255,0.2)" }
-              }
-            },
-            plugins: {
-              legend: {
-                labels: { color: textColor }
-              }
-            }
-          }
-        });
-
-        continue;
-      }
 
       /* === STANDARDNÍ LINE CHART === */
 
@@ -525,6 +463,183 @@ class PocasiMeteoCard extends HTMLElement {
           }
         }
       });
+    }
+
+    // Nakonec WindRose jako poslední dlaždice
+    const windSensor = sensorEntities.find(
+      s => s.replace("sensor." + prefix + "_", "").toLowerCase() === "vitrsmer"
+    );
+
+    if (windSensor && history[windSensor] && history[windSensor][0] && history[windSensor][0].length) {
+      const raw = history[windSensor][0];
+      const points = raw
+        .map(p => ({
+          x: Date.parse(p.last_changed),
+          y: Number(p.state)
+        }))
+        .filter(p => !isNaN(p.x) && !isNaN(p.y));
+
+      if (points.length >= 2) {
+        const { canvas, tile, cleanName } = canvases[windSensor];
+        const ctx = canvas.getContext("2d");
+
+        if (this._charts[windSensor]) this._charts[windSensor].destroy();
+
+        const host = this.shadowRoot.host;
+
+        const textColor =
+          safeCssVar(host, "--primary-text-color", "") ||
+          (isLightTheme(host) ? "#000000" : "#ffffff");
+
+        const bgColor =
+          safeCssVar(host, "--ha-card-background", "") ||
+          safeCssVar(host, "--card-background-color", "") ||
+          (isLightTheme(host) ? "#ffffff" : "#1c1c1c");
+
+        canvas.style.backgroundColor = bgColor;
+        tile.style.backgroundColor = bgColor;
+
+        const bins = buildWindRose(points);
+
+        const avg = Number(entity.attributes.VitrSmer_avg || 0);
+        const mode = Number(entity.attributes.VitrSmer_mode || 0);
+        const vari = Number(entity.attributes.VitrSmer_var || 0);
+
+        const avgIdx = directionToIndex(avg);
+        const modeIdx = directionToIndex(mode);
+
+        const baseColor = "#4caf50";
+
+        const backgroundColors = bins.map((_, idx) => {
+          return baseColor;
+        });
+
+        const windRoseLabelsPlugin = {
+          id: "windRoseLabels",
+          afterDraw(chart) {
+            const { ctx, chartArea } = chart;
+            const cx = chartArea.left + (chartArea.right - chartArea.left) / 2;
+            const cy = chartArea.top + (chartArea.bottom - chartArea.top) / 2;
+            const radius = (chartArea.right - chartArea.left) / 2;
+
+            ctx.save();
+            ctx.fillStyle = textColor;
+            ctx.font = "12px sans-serif";
+            ctx.textAlign = "center";
+
+            WIND_DIR_LABELS.forEach((label, i) => {
+              const angle = (i * 22.5 - 90) * Math.PI / 180;
+              const x = cx + Math.cos(angle) * (radius + 12);
+              const y = cy + Math.sin(angle) * (radius + 12);
+              ctx.fillText(label, x, y);
+            });
+
+            ctx.restore();
+          }
+        };
+
+        const windRoseVectorsPlugin = {
+          id: "windRoseVectors",
+          afterDraw(chart) {
+            const { ctx, chartArea } = chart;
+            const cx = chartArea.left + (chartArea.right - chartArea.left) / 2;
+            const cy = chartArea.top + (chartArea.bottom - chartArea.top) / 2;
+            const radius = (chartArea.right - chartArea.left) / 2;
+
+            // VAR sector
+            const startAngle = (avg - vari - 90) * Math.PI / 180;
+            const endAngle = (avg + vari - 90) * Math.PI / 180;
+
+            ctx.save();
+            ctx.fillStyle = "rgba(255,165,0,0.25)";
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, startAngle, endAngle);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            // AVG line
+            const avgAngle = (avg - 90) * Math.PI / 180;
+            ctx.save();
+            ctx.strokeStyle = "#ff0000";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(avgAngle) * radius, cy + Math.sin(avgAngle) * radius);
+            ctx.stroke();
+            ctx.restore();
+
+            // MODE line
+            const modeAngle = (mode - 90) * Math.PI / 180;
+            ctx.save();
+            ctx.strokeStyle = "#0000ff";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(modeAngle) * radius, cy + Math.sin(modeAngle) * radius);
+            ctx.stroke();
+            ctx.restore();
+          }
+        };
+
+        this._charts[windSensor] = new Chart(ctx, {
+          type: "polarArea",
+          data: {
+            labels: WIND_DIR_LABELS,
+            datasets: [{
+              label: cleanName,
+              data: bins,
+              backgroundColor: backgroundColors,
+              borderWidth: 1
+            }]
+          },
+          options: {
+            scales: {
+              r: {
+                ticks: { display: false },
+                grid: { color: "rgba(255,255,255,0.2)" }
+              }
+            },
+            plugins: {
+              legend: {
+                labels: {
+                  color: textColor,
+                  generateLabels(chart) {
+                    return [
+                      {
+                        text: cleanName,
+                        fillStyle: baseColor,
+                        strokeStyle: baseColor,
+                        lineWidth: 2
+                      },
+                      {
+                        text: `Avg: ${avg.toFixed(1)}°`,
+                        fillStyle: "#ff0000",
+                        strokeStyle: "#ff0000",
+                        lineWidth: 2
+                      },
+                      {
+                        text: `Mode: ${mode.toFixed(1)}°`,
+                        fillStyle: "#0000ff",
+                        strokeStyle: "#0000ff",
+                        lineWidth: 2
+                      },
+                      {
+                        text: `Var: ±${vari.toFixed(1)}°`,
+                        fillStyle: "rgba(255,165,0,0.25)",
+                        strokeStyle: "rgba(255,165,0,0.25)",
+                        lineWidth: 2
+                      }
+                    ];
+                  }
+                }
+              }
+            }
+          },
+          plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin]
+        });
+      }
     }
   }
 
