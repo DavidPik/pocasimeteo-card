@@ -432,7 +432,7 @@ class PocasiMeteoCard extends HTMLElement {
                 color: textColor,
                 padding: 12,
                 font: {
-                  size: 14,
+                  size: 12,
                   color: textColor
                 },
                 generateLabels(chart) {
@@ -525,10 +525,10 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.50;
+            ) * 0.45;
 
             ctx.save();
-            ctx.fillStyle = chart.options.plugins.legend.labels.color;
+            ctx.fillStyle = textColor;
             ctx.font = "14px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
@@ -537,8 +537,8 @@ class PocasiMeteoCard extends HTMLElement {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
 
               // Popisky dáme dál od středu
-              const x = cx + Math.cos(angle) * (radius + 46);
-              const y = cy + Math.sin(angle) * (radius + 46);
+              const x = cx + Math.cos(angle) * (radius + 32);
+              const y = cy + Math.sin(angle) * (radius + 32);
 
               ctx.fillText(label, x, y);
             });
@@ -559,7 +559,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.50;
+            ) * 0.45;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -614,8 +614,8 @@ class PocasiMeteoCard extends HTMLElement {
             maintainAspectRatio: false,
             layout: {
               padding: {
-                top: 70,
-                bottom: 50,
+                top: 50,
+                bottom: 40,
                 left: 20,
                 right: 20
               }
@@ -632,7 +632,7 @@ class PocasiMeteoCard extends HTMLElement {
                 labels: {
                   color: textColor,
                   padding: 42,
-                  boxWidth: 28,
+                  boxWidth: 20,
                   font: {
                     size: 14,
                     color: textColor
