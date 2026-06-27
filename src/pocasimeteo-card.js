@@ -1,4 +1,4 @@
-/*  =======  POCASIMETEO CARD – VERZE S OPRAVOU PRO MOBILNÍ APLIKACI A TÉMATA  =======  */
+/*  =======  POCASIMETEO CARD – VERZE S WINDROSE + AVG/MODE/VAR =======  */
 
 import {
   Chart,
@@ -9,7 +9,10 @@ import {
   TimeScale,
   Filler,
   Tooltip,
-  Legend
+  Legend,
+  PolarAreaController,
+  ArcElement,
+  RadialLinearScale
 } from "chart.js";
 
 import "chartjs-adapter-date-fns";
@@ -22,7 +25,10 @@ Chart.register(
   TimeScale,
   Filler,
   Tooltip,
-  Legend
+  Legend,
+  PolarAreaController,
+  ArcElement,
+  RadialLinearScale
 );
 
 /* === VALID_SENSORS v lowercase === */
@@ -40,12 +46,12 @@ const VALID_SENSORS = [
   "co2",
   "pm1",
   "pm2",
-  "pm1v"
+  "pm1v",
+  "vitrsmer"
 ];
 
 const NON_GRAPH_SENSORS = [
-  "srazkyden",
-  "vitrsmer"
+  "srazkyden"
 ];
 
 /* === COLOR_MAP musí být OBJEKT, nikoli pole === */
@@ -66,6 +72,12 @@ const COLOR_MAP = {
   Pm1v: "#9575cd"
 };
 
+/* === WINDROSE LABELS === */
+const WIND_DIR_LABELS = [
+  "N","NNE","NE","ENE","E","ESE","SE","SSE",
+  "S","SSW","SW","WSW","W","WNW","NW","NNW"
+];
+
 /* === FUNKCE: bezpečné čtení CSS proměnných s fallbackem === */
 function safeCssVar(el, name, fallback) {
   try {
@@ -80,6 +92,42 @@ function safeCssVar(el, name, fallback) {
 function isLightTheme(el) {
   const b = safeCssVar(el, "--brightness", "0");
   return b.trim() === "1";
+}
+
+/* === FUNKCE: převod stupňů na světovou stranu === */
+function degToDirection(deg) {
+  if (deg == null || isNaN(deg)) return "";
+  const dirs = WIND_DIR_LABELS;
+  const idx = Math.round(deg / 22.5) % 16;
+  return dirs[idx];
+}
+
+/* === FUNKCE: index směru === */
+function directionToIndex(deg) {
+  return Math.round(deg / 22.5) % 16;
+}
+
+/* === FUNKCE: vytvoření histogramu pro WindRose === */
+function buildWindRose(points) {
+  const bins = new Array(16).fill(0);
+  for (const p of points) {
+    const deg = Number(p.y);
+    if (isNaN(deg)) continue;
+    const idx = directionToIndex(deg);
+    bins[idx]++;
+  }
+  return bins;
+}
+
+/* === FUNKCE: výseč variability === */
+function buildVarSector(avgDeg, varDeg) {
+  const avgIdx = directionToIndex(avgDeg);
+  const span = Math.round(varDeg / 22.5);
+  const indices = [];
+  for (let i = -span; i <= span; i++) {
+    indices.push((avgIdx + i + 16) % 16);
+  }
+  return indices;
 }
 
 class PocasiMeteoCard extends HTMLElement {
@@ -227,7 +275,7 @@ class PocasiMeteoCard extends HTMLElement {
     current.innerHTML = `
       <div>Vlhkost: ${d.VlhkostVnejsi}%</div>
       <div>Tlak: ${d.TlakRel || ""} hPa</div>
-      <div>Vítr: ${d.Vitr} m/s (${d.VitrSmer || ""})</div>
+      <div>Vítr: ${d.Vitr} m/s (${degToDirection(Number(d.VitrSmer))})</div>
       <div>Srážky dnes: ${d.SrazkyDen || 0} mm</div>
       <div>Intenzita srážek: ${d.rainIntensity || 0} mm/5min</div>
     `;
@@ -305,8 +353,6 @@ class PocasiMeteoCard extends HTMLElement {
 
     for (const sensor of sensorEntities) {
       const suffix = sensor.replace("sensor." + prefix + "_", "").toLowerCase();
-      if (NON_GRAPH_SENSORS.includes(suffix)) continue;
-
       if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
 
       const raw = history[sensor][0];
@@ -322,19 +368,10 @@ class PocasiMeteoCard extends HTMLElement {
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
 
-      const min = Math.min(...points.map(p => p.y));
-      const max = Math.max(...points.map(p => p.y));
-
-      const minPoint = points.find(p => p.y === min);
-      const maxPoint = points.find(p => p.y === max);
-
       const { canvas, tile, cleanName } = canvases[sensor];
       const ctx = canvas.getContext("2d");
 
       if (this._charts[sensor]) this._charts[sensor].destroy();
-
-      const color = COLOR_MAP[suffix] || "#3b82f6";
-      const rgba = this._hexToRgba(color, 0.25);
 
       /* === Fallbacky pro mobilní aplikaci + detekce tématu === */
       const host = this.shadowRoot.host;
@@ -350,6 +387,70 @@ class PocasiMeteoCard extends HTMLElement {
 
       canvas.style.backgroundColor = bgColor;
       tile.style.backgroundColor = bgColor;
+
+      /* === WINDROSE PRO VITRSMER === */
+      if (suffix === "vitrsmer") {
+        const bins = buildWindRose(points);
+
+        const avg = Number(entity.attributes.VitrSmer_avg || 0);
+        const mode = Number(entity.attributes.VitrSmer_mode || 0);
+        const vari = Number(entity.attributes.VitrSmer_var || 0);
+
+        const avgIdx = directionToIndex(avg);
+        const modeIdx = directionToIndex(mode);
+        const varSector = buildVarSector(avg, vari);
+
+        const baseColor = "#4caf50";
+        const highlightAvg = "#ff0000";
+        const highlightMode = "#0000ff";
+        const highlightVar = "rgba(255,165,0,0.5)";
+
+        const backgroundColors = bins.map((_, idx) => {
+          if (idx === avgIdx) return highlightAvg;
+          if (idx === modeIdx) return highlightMode;
+          if (varSector.includes(idx)) return highlightVar;
+          return baseColor;
+        });
+
+        this._charts[sensor] = new Chart(ctx, {
+          type: "polarArea",
+          data: {
+            labels: WIND_DIR_LABELS,
+            datasets: [{
+              label: cleanName,
+              data: bins,
+              backgroundColor: backgroundColors,
+              borderWidth: 1
+            }]
+          },
+          options: {
+            scales: {
+              r: {
+                ticks: { display: false },
+                grid: { color: "rgba(255,255,255,0.2)" }
+              }
+            },
+            plugins: {
+              legend: {
+                labels: { color: textColor }
+              }
+            }
+          }
+        });
+
+        continue;
+      }
+
+      /* === STANDARDNÍ LINE CHART === */
+
+      const min = Math.min(...points.map(p => p.y));
+      const max = Math.max(...points.map(p => p.y));
+
+      const minPoint = points.find(p => p.y === min);
+      const maxPoint = points.find(p => p.y === max);
+
+      const color = COLOR_MAP[suffix] || "#3b82f6";
+      const rgba = this._hexToRgba(color, 0.25);
 
       this._charts[sensor] = new Chart(ctx, {
         type: "line",
