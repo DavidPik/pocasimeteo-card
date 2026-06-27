@@ -308,7 +308,7 @@ class PocasiMeteoCard extends HTMLElement {
 
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
-      canvas.height = 260;
+      canvas.height = 300;
 
       tile.appendChild(title);
       tile.appendChild(canvas);
@@ -432,7 +432,7 @@ class PocasiMeteoCard extends HTMLElement {
                 color: textColor,
                 padding: 12,
                 font: {
-                  size: 12,
+                  size: 14,
                   color: textColor
                 },
                 generateLabels(chart) {
@@ -525,7 +525,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.50;
+            ) * 0.58;
 
             ctx.save();
             ctx.fillStyle = textColor;
@@ -559,7 +559,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.50;
+            ) * 0.58;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -631,10 +631,10 @@ class PocasiMeteoCard extends HTMLElement {
                 position: "bottom",
                 labels: {
                   color: textColor,
-                  padding: 42,
+                  padding: 45,
                   boxWidth: 20,
                   font: {
-                    size: 12,
+                    size: 14,
                     color: textColor
                   },
                   generateLabels(chart) {
