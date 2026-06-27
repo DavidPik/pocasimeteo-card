@@ -214,7 +214,7 @@ class PocasiMeteoCard extends HTMLElement {
           flex-direction:column; 
         }
         .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; color:var(--primary-text-color,#fff); }
-        .pm-graph { width:100%; height:200px; }
+        .pm-graph { width:100%; height:220px; }
       </style>
 
       <ha-card class="pm-card">
@@ -283,8 +283,14 @@ class PocasiMeteoCard extends HTMLElement {
 
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
 
+    // nejdřív všechny senzory kromě vitrsmer, vitrsmer dáme na konec
+    const orderedSensors = [
+      ...sensorEntities.filter(s => s.replace("sensor." + prefix + "_", "").toLowerCase() !== "vitrsmer"),
+      ...sensorEntities.filter(s => s.replace("sensor." + prefix + "_", "").toLowerCase() === "vitrsmer")
+    ];
+
     const canvases = {};
-    for (const sensor of sensorEntities) {
+    for (const sensor of orderedSensors) {
       const suffix = sensor.replace("sensor." + prefix + "_", "");
 
       const tile = document.createElement("div");
@@ -302,7 +308,7 @@ class PocasiMeteoCard extends HTMLElement {
 
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
-      canvas.height = 200;
+      canvas.height = 220;
 
       tile.appendChild(title);
       tile.appendChild(canvas);
@@ -313,7 +319,7 @@ class PocasiMeteoCard extends HTMLElement {
 
     const history = {};
 
-    await Promise.all(sensorEntities.map(async sensor => {
+    await Promise.all(orderedSensors.map(async sensor => {
       const suffix = sensor.replace("sensor." + prefix + "_", "").toLowerCase();
       if (NON_GRAPH_SENSORS.includes(suffix)) return;
 
@@ -340,8 +346,8 @@ class PocasiMeteoCard extends HTMLElement {
       } catch (e) {}
     }));
 
-    // Nejprve všechny standardní grafy (bez vitrsmer)
-    for (const sensor of sensorEntities) {
+    // standardní grafy (bez vitrsmer)
+    for (const sensor of orderedSensors) {
       const suffix = sensor.replace("sensor." + prefix + "_", "").toLowerCase();
       if (suffix === "vitrsmer") continue;
       if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
@@ -356,15 +362,11 @@ class PocasiMeteoCard extends HTMLElement {
 
       if (points.length < 2) continue;
 
-      const s = hass.states[sensor];
-      const unit = s.attributes.unit_of_measurement || "";
-
       const { canvas, tile, cleanName } = canvases[sensor];
       const ctx = canvas.getContext("2d");
 
       if (this._charts[sensor]) this._charts[sensor].destroy();
 
-      /* === Fallbacky pro mobilní aplikaci + detekce tématu === */
       const host = this.shadowRoot.host;
 
       const textColor =
@@ -378,8 +380,6 @@ class PocasiMeteoCard extends HTMLElement {
 
       canvas.style.backgroundColor = bgColor;
       tile.style.backgroundColor = bgColor;
-
-      /* === STANDARDNÍ LINE CHART === */
 
       const min = Math.min(...points.map(p => p.y));
       const max = Math.max(...points.map(p => p.y));
@@ -427,30 +427,29 @@ class PocasiMeteoCard extends HTMLElement {
           maintainAspectRatio: false,
           plugins: {
             legend: {
+              position: "bottom",
               labels: {
                 color: textColor,
+                padding: 12,
                 generateLabels(chart) {
                   return [
                     {
                       text: cleanName,
                       fillStyle: color,
                       strokeStyle: color,
-                      lineWidth: 2,
-                      fontColor: textColor
+                      lineWidth: 2
                     },
                     {
                       text: `Min: ${min.toFixed(1)}`,
                       fillStyle: "red",
                       strokeStyle: "red",
-                      lineWidth: 2,
-                      fontColor: textColor
+                      lineWidth: 2
                     },
                     {
                       text: `Max: ${max.toFixed(1)}`,
                       fillStyle: "green",
                       strokeStyle: "green",
-                      lineWidth: 2,
-                      fontColor: textColor
+                      lineWidth: 2
                     }
                   ];
                 }
@@ -465,8 +464,8 @@ class PocasiMeteoCard extends HTMLElement {
       });
     }
 
-    // Nakonec WindRose jako poslední dlaždice
-    const windSensor = sensorEntities.find(
+    // WindRose jako poslední dlaždice
+    const windSensor = orderedSensors.find(
       s => s.replace("sensor." + prefix + "_", "").toLowerCase() === "vitrsmer"
     );
 
@@ -505,14 +504,9 @@ class PocasiMeteoCard extends HTMLElement {
         const mode = Number(entity.attributes.VitrSmer_mode || 0);
         const vari = Number(entity.attributes.VitrSmer_var || 0);
 
-        const avgIdx = directionToIndex(avg);
-        const modeIdx = directionToIndex(mode);
-
         const baseColor = "#4caf50";
 
-        const backgroundColors = bins.map((_, idx) => {
-          return baseColor;
-        });
+        const backgroundColors = bins.map(() => baseColor);
 
         const windRoseLabelsPlugin = {
           id: "windRoseLabels",
@@ -520,17 +514,21 @@ class PocasiMeteoCard extends HTMLElement {
             const { ctx, chartArea } = chart;
             const cx = chartArea.left + (chartArea.right - chartArea.left) / 2;
             const cy = chartArea.top + (chartArea.bottom - chartArea.top) / 2;
-            const radius = (chartArea.right - chartArea.left) / 2;
+            const radius = Math.min(
+              (chartArea.right - chartArea.left),
+              (chartArea.bottom - chartArea.top)
+            ) * 0.4;
 
             ctx.save();
             ctx.fillStyle = textColor;
             ctx.font = "12px sans-serif";
             ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
 
             WIND_DIR_LABELS.forEach((label, i) => {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
-              const x = cx + Math.cos(angle) * (radius + 12);
-              const y = cy + Math.sin(angle) * (radius + 12);
+              const x = cx + Math.cos(angle) * (radius + 24);
+              const y = cy + Math.sin(angle) * (radius + 24);
               ctx.fillText(label, x, y);
             });
 
@@ -544,7 +542,10 @@ class PocasiMeteoCard extends HTMLElement {
             const { ctx, chartArea } = chart;
             const cx = chartArea.left + (chartArea.right - chartArea.left) / 2;
             const cy = chartArea.top + (chartArea.bottom - chartArea.top) / 2;
-            const radius = (chartArea.right - chartArea.left) / 2;
+            const radius = Math.min(
+              (chartArea.right - chartArea.left),
+              (chartArea.bottom - chartArea.top)
+            ) * 0.4;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -595,6 +596,8 @@ class PocasiMeteoCard extends HTMLElement {
             }]
           },
           options: {
+            responsive: false,
+            maintainAspectRatio: false,
             scales: {
               r: {
                 ticks: { display: false },
@@ -603,8 +606,10 @@ class PocasiMeteoCard extends HTMLElement {
             },
             plugins: {
               legend: {
+                position: "bottom",
                 labels: {
                   color: textColor,
+                  padding: 12,
                   generateLabels(chart) {
                     return [
                       {
