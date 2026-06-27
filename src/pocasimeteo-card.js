@@ -512,23 +512,30 @@ class PocasiMeteoCard extends HTMLElement {
           id: "windRoseLabels",
           afterDraw(chart) {
             const { ctx, chartArea } = chart;
-            const cx = chartArea.left + (chartArea.right - chartArea.left) / 2;
-            const cy = chartArea.top + (chartArea.bottom - chartArea.top) / 2;
+
+            // Střed grafu
+            const cx = (chartArea.left + chartArea.right) / 2;
+            const cy = (chartArea.top + chartArea.bottom) / 2;
+
+            // Radius musí být menší, aby se popisky vešly
             const radius = Math.min(
-              (chartArea.right - chartArea.left),
-              (chartArea.bottom - chartArea.top)
-            ) * 0.4;
+              chartArea.right - chartArea.left,
+              chartArea.bottom - chartArea.top
+            ) * 0.35;
 
             ctx.save();
-            ctx.fillStyle = textColor;
-            ctx.font = "12px sans-serif";
+            ctx.fillStyle = chart.options.plugins.legend.labels.color;
+            ctx.font = "14px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
 
             WIND_DIR_LABELS.forEach((label, i) => {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
-              const x = cx + Math.cos(angle) * (radius + 24);
-              const y = cy + Math.sin(angle) * (radius + 24);
+
+              // Popisky dáme dál od středu
+              const x = cx + Math.cos(angle) * (radius + 32);
+              const y = cy + Math.sin(angle) * (radius + 32);
+
               ctx.fillText(label, x, y);
             });
 
@@ -540,12 +547,15 @@ class PocasiMeteoCard extends HTMLElement {
           id: "windRoseVectors",
           afterDraw(chart) {
             const { ctx, chartArea } = chart;
-            const cx = chartArea.left + (chartArea.right - chartArea.left) / 2;
-            const cy = chartArea.top + (chartArea.bottom - chartArea.top) / 2;
+
+            const cx = (chartArea.left + chartArea.right) / 2;
+            const cy = (chartArea.top + chartArea.bottom) / 2;
+
+            // Stejný radius jako pro popisky
             const radius = Math.min(
-              (chartArea.right - chartArea.left),
-              (chartArea.bottom - chartArea.top)
-            ) * 0.4;
+              chartArea.right - chartArea.left,
+              chartArea.bottom - chartArea.top
+            ) * 0.35;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -609,7 +619,8 @@ class PocasiMeteoCard extends HTMLElement {
                 position: "bottom",
                 labels: {
                   color: textColor,
-                  padding: 12,
+                  padding: 20,
+                  boxWidth: 20,
                   generateLabels(chart) {
                     return [
                       {
