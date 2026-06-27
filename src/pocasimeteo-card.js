@@ -521,7 +521,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.42;
+            ) * 0.48;
 
             ctx.save();
             ctx.fillStyle = chart.options.plugins.legend.labels.color;
@@ -533,8 +533,8 @@ class PocasiMeteoCard extends HTMLElement {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
 
               // Popisky dáme dál od středu
-              const x = cx + Math.cos(angle) * (radius + 32);
-              const y = cy + Math.sin(angle) * (radius + 32);
+              const x = cx + Math.cos(angle) * (radius + 40);
+              const y = cy + Math.sin(angle) * (radius + 40);
 
               ctx.fillText(label, x, y);
             });
@@ -555,7 +555,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.42;
+            ) * 0.48;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -610,8 +610,8 @@ class PocasiMeteoCard extends HTMLElement {
             maintainAspectRatio: false,
             layout: {
               padding: {
-                top: 50,
-                bottom: 20,
+                top: 70,
+                bottom: 50,
                 left: 20,
                 right: 20
               }
@@ -627,7 +627,7 @@ class PocasiMeteoCard extends HTMLElement {
                 position: "bottom",
                 labels: {
                   color: textColor,
-                  padding: 20,
+                  padding: 36,
                   boxWidth: 20,
                   font: {
                     size: 14,
