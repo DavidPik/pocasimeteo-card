@@ -634,9 +634,10 @@ class PocasiMeteoCard extends HTMLElement {
                   generateLabels: () => []
                 }
               }
-            },
-            plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin]
-          });
+            }
+          },
+          plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin]
+        });
 
         legend.innerHTML = `
           <div class="pm-legend-item">
