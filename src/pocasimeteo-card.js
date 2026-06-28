@@ -33,30 +33,69 @@ Chart.register(
 
 /* === VALID_SENSORS === */
 const VALID_SENSORS = [
-  "teplotavnejsi","vlhkostvnejsi","tlakrel","vitr","vitrnarazy",
-  "rainintensity","slunzareni","uvindex","teplotavnitrni",
-  "vlhkostvnitrni","co2","pm1","pm2","pm1v","vitrsmer"
+  "teplotavnejsi",
+  "vlhkostvnejsi",
+  "tlakrel","vitr",
+  "vitrnarazy",
+  "rainintensity",
+  "slunzareni",
+  "uvindex",
+  "teplotavnitrni",
+  "vlhkostvnitrni",
+  "co2",
+  "pm1",
+  "pm2",
+  "pm1v",
+  "vitrsmer"
 ];
 
 const NON_GRAPH_SENSORS = ["srazkyden"];
 
+/* === NÁZVY === */
+const TITLE_MAP = {
+  teplotavnejsi: "Teplota vnější",
+  teplotavnitrni: "Teplota vnitřní",
+  vlhkostvnejsi: "Vlhkost vnější",
+  vlhkostvnitrni: "Vlhkost vnitřní",
+  tlakrel: "Tlak relativní",
+  vitr: "Vítr",
+  vitrnarazy: "Nárazy větru",
+  vitrsmer: "Směr větru",
+  rainintensity: "Intenzita srážek",
+  slunzareni: "Sluneční záření",
+  uvindex: "UV index",
+  co2: "CO₂",
+  pm1: "PM1",
+  pm2: "PM2",
+  pm1v: "PM1 varianta"
+};
+
 /* === BARVY === */
 const COLOR_MAP = {
-  teplotavnejsi: "#ff5722",
-  vlhkostvnejsi: "#2196f3",
-  tlakrel: "#9c27b0",
-  vitr: "#4caf50",
-  vitrnarazy: "#2e7d32",
-  rainintensity: "#03a9f4",
-  slunzareni: "#ff9800",
-  uvindex: "#ffeb3b",
-  teplotavnitrni: "#ff7043",
-  vlhkostvnitrni: "#42a5f5",
-  co2: "#8d6e63",
-  pm1: "#7e57c2",
-  pm2: "#5e35b1",
-  pm1v: "#9575cd",
-  vitrsmer: "#3b82f6"
+  /* === Teplota === */
+  teplotavnejsi: "#ff6b3d",   // jasná oranžová (venkovní)
+  teplotavnitrni: "#ffa86b",  // světlejší oranžová (vnitřní)
+  /* === Vlhkost === */
+  vlhkostvnejsi: "#1e88e5",   // sytá modrá (venkovní)
+  vlhkostvnitrni: "#64b5f6",  // světlejší modrá (vnitřní)
+  /* === Tlak === */
+  tlakrel: "#8e24aa",         // fialová
+  /* === Vítr === */
+  vitr: "#43a047",            // základní zelená
+  vitrnarazy: "#2e7d32",      // tmavší zelená (nárazy)
+  vitrsmer: "#009688",        // tyrkysová (směr) – odlišná od vlhkosti
+  /* === Srážky === */
+  rainintensity: "#0288d1",   // modrá s nádechem do aqua
+  /* === Slunce === */
+  slunzareni: "#ffb300",      // jasná žlutá/oranžová
+  /* === UV === */
+  uvindex: "#fdd835",         // žlutá
+  /* === CO₂ === */
+  co2: "#6d4c41",             // hnědá
+  /* === Prach === */
+  pm1: "#7e57c2",             // světlejší fialová
+  pm2: "#5e35b1",             // tmavší fialová
+  pm1v: "#9575cd"             // pastelová fialová
 };
 
 const GRID_COLOR = "rgba(255,255,255,0.2)";
@@ -468,12 +507,12 @@ class PocasiMeteoCard extends HTMLElement {
 
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
-      const rawName = s.attributes.friendly_name || sensor;
-      const cleanName = rawName.replace(/^[A-Za-z0-9_]+\s+/,"");
+      const suffixLower = suffix.toLowerCase();
+      const prettyName = TITLE_MAP[suffixLower] || suffix;
 
       const title = document.createElement("div");
       title.classList.add("pm-graph-title");
-      title.textContent = cleanName + (unit ? " - " + unit : "");
+      title.textContent = prettyName + (unit ? " - " + unit : "");
 
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
