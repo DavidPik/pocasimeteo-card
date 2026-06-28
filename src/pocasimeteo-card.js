@@ -220,7 +220,7 @@ class PocasiMeteoCard extends HTMLElement {
         .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; color:var(--primary-text-color,#fff); }
         .pm-graph { width:100%; height:300px; }
         .pm-legend {
-          margin-top:2px;
+          margin-top:0px;
           display:flex;
           flex-wrap:wrap;
           justify-content:center;
@@ -671,8 +671,8 @@ class PocasiMeteoCard extends HTMLElement {
             startAngle: -11.25 * Math.PI /180,
             layout: {
               padding: {
-                top: 40,
-                bottom: 40,
+                top: 20,
+                bottom: 20,
                 left: 10,
                 right: 10
               }
