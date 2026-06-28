@@ -386,37 +386,40 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         const tooltipText = `${label}: ${value}× (${percent}%)`;
 
         ctx.save();
-        ctx.font = "14px sans-serif";
 
-        const bg = theme.bgColor + "ee";   // 93% opacity
-        const fg = theme.textColor;
-        const border = theme.textColor + "aa";
+        // === Chart.js tooltip style ===
+        ctx.font = "12px sans-serif";
+        ctx.textBaseline = "middle";
+        ctx.textAlign = "left";
 
-        const padding = 6;
-        const tw = ctx.measureText(tooltipText).width + padding * 2;
-        const th = 24;
+        const paddingX = 8;
+        const paddingY = 6;
 
-        // Pozice tooltipu u kurzoru
-        let tx = mx + 12;
-        let ty = my - th - 12;
+        const textWidth = ctx.measureText(tooltipText).width;
+        const boxWidth = textWidth + paddingX * 2;
+        const boxHeight = 20; // Chart.js default tooltip height
 
-        // Zabránit vykreslení mimo canvas
-        if (tx + tw > chart.width) tx = chart.width - tw - 4;
-        if (ty < chart.chartArea.top) ty = my + 12;
+        // Position near cursor
+        let tx = mx + 10;
+        let ty = my - boxHeight - 10;
 
-        // Obrys
-        ctx.strokeStyle = border;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(tx, ty, tw, th);
+        // Prevent overflow
+        if (tx + boxWidth > chart.width) tx = chart.width - boxWidth - 4;
+        if (ty < chart.chartArea.top) ty = my + 10;
 
-        // Pozadí
-        ctx.fillStyle = bg;
-        ctx.fillRect(tx, ty, tw, th);
+        // Background
+        ctx.fillStyle = theme.bgColor + "f0"; // Chart.js-like opacity
+        ctx.strokeStyle = theme.textColor + "80";
+        ctx.lineWidth = 1.5;
+
+        ctx.beginPath();
+        ctx.roundRect(tx, ty, boxWidth, boxHeight, 4);
+        ctx.fill();
+        ctx.stroke();
 
         // Text
-        ctx.fillStyle = fg;
-        ctx.textBaseline = "middle";
-        ctx.fillText(tooltipText, tx + padding, ty + th / 2);
+        ctx.fillStyle = theme.textColor;
+        ctx.fillText(tooltipText, tx + paddingX, ty + boxHeight / 2);
 
         ctx.restore();
       }
