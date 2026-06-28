@@ -629,7 +629,14 @@ class PocasiMeteoCard extends HTMLElement {
               r: {
                 ticks: { display: false },
                 grid: { color: GRID_COLOR },
-                beginAtZero: true
+                beginAtZero: true,
+                max: function(ctx) {
+                  const chartArea = ctx.chart.chartArea;
+                  const aw = chartArea.right - chartArea.left;
+                  const ah = chartArea.bottom - chartArea.top;
+                  const R = Math.min(aw, ah) * 0.50;
+                  return R;
+                }
               }
             },
             plugins: {
