@@ -229,6 +229,49 @@ function createLineChartConfig(points, cleanName, color, textColor) {
 function createWindRosePlugin(textColor, bins, avg, mode, vari) {
   return {
     id:"windRoseManual",
+    beforeInit(chart) {
+      const canvas = chart.canvas;
+
+      canvas.addEventListener("mousemove", (ev) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = ev.clientX - rect.left;
+        const y = ev.clientY - rect.top;
+
+        const { cx, cy, R } = computeChartGeometry(chart.chartArea);
+
+        const dx = x - cx;
+        const dy = y - cy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+
+        // mimo graf
+        if (dist > R) {
+          chart.$windHover = null;
+          chart.draw();
+          return;
+        }
+
+        // úhel kurzoru
+        let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        angle += 90;
+        if (angle < 0) angle += 360;
+
+        // index sektoru
+        const sectorIndex = Math.floor(angle / 22.5) % 16;
+
+        chart.$windHover = {
+          index: sectorIndex,
+          value: bins[sectorIndex],
+          angle
+        };
+
+        chart.draw();
+      });
+
+      canvas.addEventListener("mouseleave", () => {
+        chart.$windHover = null;
+        chart.draw();
+      });
+    },
     afterDraw(chart) {
       const { ctx, chartArea } = chart;
       const { cx, cy, R } = computeChartGeometry(chartArea);
@@ -329,6 +372,40 @@ function createWindRosePlugin(textColor, bins, avg, mode, vari) {
       ctx.moveTo(cx, cy);
       ctx.lineTo(cx + Math.cos(modeAngle)*offsetLine, cy + Math.sin(modeAngle)*offsetLine);
       ctx.stroke();
+
+      // === TOOLTIP ===
+      if (chart.$windHover) {
+        const { index, value } = chart.$windHover;
+
+        const label = WIND_DIR_LABELS[index];
+        const percent = ((value / maxBin) * 100).toFixed(1);
+
+        const tooltipText = `${label}: ${value}× (${percent}%)`;
+
+        ctx.save();
+        ctx.font = "14px sans-serif";
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.strokeStyle = "rgba(255,255,255,0.9)";
+        ctx.lineWidth = 3;
+
+        const padding = 6;
+        const tw = ctx.measureText(tooltipText).width + padding*2;
+        const th = 22;
+
+        const tx = cx - tw/2;
+        const ty = chart.chartArea.top + 10;
+
+        // bílý obrys
+        ctx.strokeRect(tx, ty, tw, th);
+
+        // černé pozadí
+        ctx.fillRect(tx, ty, tw, th);
+
+        // text
+        ctx.fillStyle = "#fff";
+        ctx.fillText(tooltipText, tx + padding, ty + th/2);
+        ctx.restore();
+      }
 
       ctx.restore();
     }
