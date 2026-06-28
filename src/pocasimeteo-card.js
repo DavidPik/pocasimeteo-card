@@ -1,4 +1,4 @@
-/*  =======  POCASIMETEO CARD – VERZE S WINDROSE + AVG/MODE/VAR (OPTIMALIZOVANÁ VERZE) =======  */
+/*  =======  POCASIMETEO CARD – VERZE S WINDROSE + AVG/MODE/VAR (OPTIMALIZOVANÁ + CENTROVANÉ VÝSEČE) =======  */
 
 import {
   Chart,
@@ -233,7 +233,10 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/* === JEDEN PLUGIN PRO CELÝ WINDROSE (GRID + LABELY + AVG/MODE/VAR) === */
+/* === JEDEN PLUGIN PRO CELÝ WINDROSE (GRID + LABELY + AVG/MODE/VAR) ===
+   Výseče jsou centrované na geografické směry:
+   - startAngle je posunutý tak, aby střed první výseče mířil na N (nahoru).
+*/
 function createWindRosePlugin(textColor, avg, mode, vari) {
   return {
     id: "windRose",
@@ -253,7 +256,7 @@ function createWindRosePlugin(textColor, avg, mode, vari) {
         ctx.stroke();
       });
 
-      // kříž do hlavních směrů
+      // kříž do hlavních směrů (E, S, W, N)
       [0, 90, 180, 270].forEach(deg => {
         const angle = (deg - 90) * Math.PI / 180;
         const x = cx + Math.cos(angle) * R;
@@ -653,7 +656,10 @@ class PocasiMeteoCard extends HTMLElement {
           options: {
             responsive: false,
             maintainAspectRatio: false,
-            startAngle: -11.25 * Math.PI / 180,
+            // 16 výsečí po 22.5°; startAngle posunutý tak,
+            // aby střed první výseče mířil na N (−90°).
+            // střed = startAngle + 11.25° => startAngle = −101.25°
+            startAngle: (-101.25 * Math.PI) / 180,
             layout: {
               padding: {
                 top: 20,
