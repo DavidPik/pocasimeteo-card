@@ -63,14 +63,13 @@ entity: weather.pocasimeteo
 ### Povinné parametry
 | Parametr	| Typ	| Popis  |
 | ---  | ---  | ---  |
-| entity	| string	| Entita poskytovaná backendovou integrací PočasíMeteo (např. weather.pocasimeteo). Karta z této entity načítá aktuální hodnoty a metadata meteostanice.  |
+| entity	| string	| Entita poskytovaná backendovou integrací PočasíMeteo (např. weather.pocasimeteo).  |
 
 ### Volitelné parametry
 | Parametr	| Typ  | Výchozí hodnota  | Popis  |
 | ---  | ---  | ---  | ---  |
 | show_graphs  | boolean	| true	| Umožňuje vypnout vykreslování grafů. Pokud je false, karta zobrazí pouze aktuální hodnoty bez historických grafů.  |
 | hide_sensors	| list(string)	| []	| Seznam suffixů senzorů, které se nemají zobrazovat. Hodnoty musí odpovídat názvům v VALID_SENSORS (např. ["pm1", "pm2"]).  |
-| (žádné další parametry nejsou aktuálně podporovány)  |   |   | Parametr camera_stream byl odstraněn a karta v současné verzi nepodporuje zobrazení kamerového streamu.  |
 
 ## Příklad s volitelnými parametry
 ```yaml
@@ -82,6 +81,7 @@ hide_sensors:
   - pm2
   - co2
 ```
+
 ### 📝 Poznámky
 Hodnoty v hide_sensors musí přesně odpovídat suffixům senzorů, které karta získává z backendu (viz VALID_SENSORS v kódu).
 
