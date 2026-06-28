@@ -234,13 +234,15 @@ function createWindRosePlugin(textColor, bins, avg, mode, vari) {
 
       canvas.addEventListener("mousemove", (ev) => {
         const rect = canvas.getBoundingClientRect();
-        const x = ev.clientX - rect.left;
-        const y = ev.clientY - rect.top;
+        chart.$mouse = {
+          x: ev.clientX - rect.left,
+          y: ev.clientY - rect.top
+        };
 
         const { cx, cy, R } = computeChartGeometry(chart.chartArea);
 
-        const dx = x - cx;
-        const dy = y - cy;
+        const dx = chart.$mouse.x - cx;
+        const dy = chart.$mouse.y - cy;
         const dist = Math.sqrt(dx*dx + dy*dy);
 
         // mimo graf
@@ -273,6 +275,7 @@ function createWindRosePlugin(textColor, bins, avg, mode, vari) {
       });
     },
     afterDraw(chart) {
+      chart.$bins = bins;
       const { ctx, chartArea } = chart;
       const { cx, cy, R } = computeChartGeometry(chartArea);
 
@@ -374,36 +377,47 @@ function createWindRosePlugin(textColor, bins, avg, mode, vari) {
       ctx.stroke();
 
       // === TOOLTIP ===
-      if (chart.$windHover) {
+      if (chart.$windHover && chart.$mouse) {
         const { index, value } = chart.$windHover;
+        const { x: mx, y: my } = chart.$mouse;
 
         const label = WIND_DIR_LABELS[index];
         const percent = ((value / maxBin) * 100).toFixed(1);
-
         const tooltipText = `${label}: ${value}× (${percent}%)`;
 
         ctx.save();
         ctx.font = "14px sans-serif";
-        ctx.fillStyle = "rgba(0,0,0,0.7)";
-        ctx.strokeStyle = "rgba(255,255,255,0.9)";
-        ctx.lineWidth = 3;
+
+        const bg = theme.bgColor + "ee";   // 93% opacity
+        const fg = theme.textColor;
+        const border = theme.textColor + "aa";
 
         const padding = 6;
-        const tw = ctx.measureText(tooltipText).width + padding*2;
-        const th = 22;
+        const tw = ctx.measureText(tooltipText).width + padding * 2;
+        const th = 24;
 
-        const tx = cx - tw/2;
-        const ty = chart.chartArea.top + 10;
+        // Pozice tooltipu u kurzoru
+        let tx = mx + 12;
+        let ty = my - th - 12;
 
-        // bílý obrys
+        // Zabránit vykreslení mimo canvas
+        if (tx + tw > chart.width) tx = chart.width - tw - 4;
+        if (ty < chart.chartArea.top) ty = my + 12;
+
+        // Obrys
+        ctx.strokeStyle = border;
+        ctx.lineWidth = 2;
         ctx.strokeRect(tx, ty, tw, th);
 
-        // černé pozadí
+        // Pozadí
+        ctx.fillStyle = bg;
         ctx.fillRect(tx, ty, tw, th);
 
-        // text
-        ctx.fillStyle = "#fff";
-        ctx.fillText(tooltipText, tx + padding, ty + th/2);
+        // Text
+        ctx.fillStyle = fg;
+        ctx.textBaseline = "middle";
+        ctx.fillText(tooltipText, tx + padding, ty + th / 2);
+
         ctx.restore();
       }
 
