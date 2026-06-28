@@ -101,14 +101,14 @@ Karta načítá data z entity: weather.<název_stanice>
 
 A zobrazuje:
 
- - TeplotaVnejsi
- - VlhkostVnejsi
+ - TeplotaVnejsi, TeplotaVnitrni
+ - VlhkostVnejsi, VlhkostVnitrni
  - Vitr, VitrNarazy, VitrSmer
  - SrazkyDen
  - TlakRel
  - UVindex
  - SlunZareni
- - TeplotaVnitrni, VlhkostVnitrni
+ - a další... 
    
 Ke každému senzoru komponenta počítá Min a Max za posledních 24 hodin, s výjimkou senzoru VitrSmer, ke kterému počítá Average, Modus a Variance.
 
