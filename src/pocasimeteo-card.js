@@ -456,8 +456,8 @@ class PocasiMeteoCard extends HTMLElement {
             tooltip: {}
           },
           scales: {
-            x: { type: "time", time: { unit: "hour" }, ticks: { color: textColor }, grid: GRID_COLOR },
-            y: { ticks: { color: textColor }, grid: GRID_COLOR }
+            x: { type: "time", time: { unit: "hour" }, ticks: { color: textColor }, grid: {color: GRID_COLOR} },
+            y: { ticks: { color: textColor }, grid: {color: GRID_COLOR} }
           }
         }
       });
