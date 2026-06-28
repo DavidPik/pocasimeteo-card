@@ -42,11 +42,21 @@ const NON_GRAPH_SENSORS = ["srazkyden"];
 
 /* === BARVY === */
 const COLOR_MAP = {
-  TeplotaVnejsi:"#ff5722", VlhkostVnejsi:"#2196f3", TlakRel:"#9c27b0",
-  Vitr:"#4caf50", VitrNarazy:"#2e7d32", rainIntensity:"#03a9f4",
-  SlunZareni:"#ff9800", UVindex:"#ffeb3b", TeplotaVnitrni:"#ff7043",
-  VlhkostVnitrni:"#42a5f5", Co2:"#8d6e63", Pm1:"#7e57c2",
-  Pm2:"#5e35b1", Pm1v:"#9575cd", VitrSmer:"#3b82f6"
+  teplotavnejsi: "#ff5722",
+  vlhkostvnejsi: "#2196f3",
+  tlakrel: "#9c27b0",
+  vitr: "#4caf50",
+  vitrnarazy: "#2e7d32",
+  rainintensity: "#03a9f4",
+  slunzareni: "#ff9800",
+  uvindex: "#ffeb3b",
+  teplotavnitrni: "#ff7043",
+  vlhkostvnitrni: "#42a5f5",
+  co2: "#8d6e63",
+  pm1: "#7e57c2",
+  pm2: "#5e35b1",
+  pm1v: "#9575cd",
+  vitrsmer: "#3b82f6"
 };
 
 const GRID_COLOR = "rgba(255,255,255,0.2)";
@@ -208,7 +218,7 @@ function createWindRosePlugin(textColor, bins, avg, mode, vari) {
       });
 
       /* === 3) RUČNÍ VÝSEČE === */
-      ctx.fillStyle = "#4caf50";
+      const sectorColor = COLOR_MAP["vitrsmer"] || "#3b82f6";
 
       for (let i=0; i<16; i++) {
         const binValue = bins[i];
@@ -225,7 +235,7 @@ function createWindRosePlugin(textColor, bins, avg, mode, vari) {
         ctx.closePath();
 
         // výplň
-        ctx.fillStyle = "rgba(76,175,80,0.85)";
+        ctx.fillStyle = hexToRgba(sectorColor, 0.85);
         ctx.fill();
 
         // obrys
@@ -285,8 +295,6 @@ function createWindRosePlugin(textColor, bins, avg, mode, vari) {
     }
   };
 }
-
-/* === HLAVNÍ KOMPONENTA (část 1/2 končí zde) === */
 
 class PocasiMeteoCard extends HTMLElement {
   constructor() {
