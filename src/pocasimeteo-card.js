@@ -532,8 +532,8 @@ class PocasiMeteoCard extends HTMLElement {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
 
               // Popisky dáme dál od středu
-              const x = cx + Math.cos(angle) * (radius + 20);
-              const y = cy + Math.sin(angle) * (radius + 20);
+              const x = cx + Math.cos(angle) * (radius + 18);
+              const y = cy + Math.sin(angle) * (radius + 18);
 
               ctx.fillText(label, x, y);
             });
@@ -554,7 +554,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.60;
+            ) * 0.68;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -576,7 +576,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(avgAngle) * (radius - 30), cy + Math.sin(avgAngle) * (radius - 30));
+            ctx.lineTo(cx + Math.cos(avgAngle) * (radius - 25), cy + Math.sin(avgAngle) * (radius - 25));
             ctx.stroke();
             ctx.restore();
 
@@ -587,35 +587,11 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(modeAngle) * (radius - 30), cy + Math.sin(modeAngle) * (radius - 30));
+            ctx.lineTo(cx + Math.cos(modeAngle) * (radius - 25), cy + Math.sin(modeAngle) * (radius - 25));
             ctx.stroke();
             ctx.restore();
           }
         };
-
-        const windRoseLegendPlugin = {
-          id: "windRoseLegendPlugin",
-          afterDraw(chart) {
-            const { ctx, chartArea } = chart;
-            const labels = chart.options.plugins.legend.labels.generateLabels(chart);
-
-            ctx.save();
-            ctx.font = "14px sans-serif";
-            ctx.fillStyle = chart.options.plugins.legend.labels.color;
-            ctx.textBaseline = "middle";
-
-            let x = chartArea.left;
-            const y = chartArea.bottom + 60;
-
-            labels.forEach(label => {
-              ctx.fillText(label.text, x, y);
-              x += ctx.measureText(label.text).width + 40;
-            });
-
-            ctx.restore();
-          }
-        };
-
 
         this._charts[windSensor] = new Chart(ctx, {
           type: "polarArea",
@@ -650,6 +626,12 @@ class PocasiMeteoCard extends HTMLElement {
                 position: "bottom",
                 labels: {
                   color: textColor,
+                  // posun legendy níž jen u WindRose
+                  usePointStyle: true,
+                  pointStyle: 'rect',
+                  textAlign: 'center',
+                  // klíčová úprava:
+                  padding: 40,
                   padding: 12,
                   boxWidth: 20,
                   font: {
@@ -682,7 +664,7 @@ class PocasiMeteoCard extends HTMLElement {
               }
             }
           },
-          plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin, windRoseLegendPlugin]
+          plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin]
         });
       }
     }
