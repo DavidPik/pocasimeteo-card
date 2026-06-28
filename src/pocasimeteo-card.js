@@ -532,7 +532,7 @@ class PocasiMeteoCard extends HTMLElement {
 
             const R = Math.min(aw, ah) * 0.50;
 
-            const gridRadii = [R * 0.20, R * 0.40, R * 0.60, R * 0.80, R * 0.90, R];
+            const gridRadii = [R * 0.15, R * 0.30, R * 0.45, R * 0.60, R * 0.75, R * 0.90];
 
             ctx.save();
             ctx.strokeStyle = GRID_COLOR;
@@ -541,6 +541,24 @@ class PocasiMeteoCard extends HTMLElement {
             gridRadii.forEach(r => {
               ctx.beginPath();
               ctx.arc(cx, cy, r, 0, Math.PI * 2);
+              ctx.stroke();
+            });
+
+            const directions = [
+              0,    // East
+              90,   // South
+              180,  // West
+              270   // North
+            ];
+
+            directions.forEach(deg => {
+              const angle = (deg - 90) * Math.PI / 180;
+              const x = cx + Math.cos(angle) * R;
+              const y = cy + Math.sin(angle) * R;
+
+              ctx.beginPath();
+              ctx.moveTo(cx, cy);
+              ctx.lineTo(x, y);
               ctx.stroke();
             });
 
