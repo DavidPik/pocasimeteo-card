@@ -429,6 +429,7 @@ class PocasiMeteoCard extends HTMLElement {
           plugins: {
             legend: {
               position: "bottom",
+              boxWidth: 20,
               labels: {
                 padding: 12,
                 color: textColor,
@@ -532,8 +533,8 @@ class PocasiMeteoCard extends HTMLElement {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
 
               // Popisky dáme dál od středu
-              const x = cx + Math.cos(angle) * (radius + 22);
-              const y = cy + Math.sin(angle) * (radius + 22);
+              const x = cx + Math.cos(angle) * (radius + 18);
+              const y = cy + Math.sin(angle) * (radius + 18);
 
               ctx.fillText(label, x, y);
             });
@@ -576,7 +577,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(avgAngle) * (radius - 25), cy + Math.sin(avgAngle) * (radius - 25));
+            ctx.lineTo(cx + Math.cos(avgAngle) * (radius - 25), cy + Math.sin(avgAngle) * (radius - 30));
             ctx.stroke();
             ctx.restore();
 
@@ -587,7 +588,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(modeAngle) * (radius - 25), cy + Math.sin(modeAngle) * (radius - 25));
+            ctx.lineTo(cx + Math.cos(modeAngle) * (radius - 25), cy + Math.sin(modeAngle) * (radius - 30));
             ctx.stroke();
             ctx.restore();
           }
