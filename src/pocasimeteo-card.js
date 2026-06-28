@@ -626,8 +626,13 @@ class PocasiMeteoCard extends HTMLElement {
                 grid: { color: GRID_COLOR }
               }
             },
-            plugins: {
-              tooltip: {}
+          plugins: {
+            tooltip: {},
+            legend: {
+              display: false,
+              labels: {
+                generateLabels: () => []
+              }
             }
           },
           plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin]
