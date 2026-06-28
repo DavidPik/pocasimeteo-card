@@ -371,7 +371,7 @@ class PocasiMeteoCard extends HTMLElement {
       const host = this.shadowRoot.host;
 
       const textColor =
-        safeCssVar(host, "--primary-text-color", "") ||
+        safeCssVar(host, "--primary-text-color", null) ||
         (isLightTheme(host) ? "#000000" : "#ffffff");
 
       const bgColor =
@@ -486,7 +486,7 @@ class PocasiMeteoCard extends HTMLElement {
         const host = this.shadowRoot.host;
 
         const textColor =
-          safeCssVar(host, "--primary-text-color", "") ||
+          safeCssVar(host, "--primary-text-color", null) ||
           (isLightTheme(host) ? "#000000" : "#ffffff");
 
         const bgColor =
@@ -520,7 +520,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.72;
+            ) * 0.88;
 
             ctx.save();
             ctx.fillStyle = textColor;
@@ -532,8 +532,8 @@ class PocasiMeteoCard extends HTMLElement {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
 
               // Popisky dáme dál od středu
-              const x = cx + Math.cos(angle) * (radius + 18);
-              const y = cy + Math.sin(angle) * (radius + 18);
+              const x = cx + Math.cos(angle) * (radius + 22);
+              const y = cy + Math.sin(angle) * (radius + 22);
 
               ctx.fillText(label, x, y);
             });
@@ -554,7 +554,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.78;
+            ) * 0.88;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -630,7 +630,7 @@ class PocasiMeteoCard extends HTMLElement {
                   pointStyle: 'rectRounded',
                   textAlign: 'center',
                   // klíčová úprava:
-                  padding: 40,
+                  padding: 20,
                   boxWidth: 20,
                   color: textColor,
                   font: {
