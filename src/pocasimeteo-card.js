@@ -457,8 +457,8 @@ class PocasiMeteoCard extends HTMLElement {
             legend: { display: false }
           },
           scales: {
-            x: { type: "time", time: { unit: "hour" }, ticks: { color: textColor }, grid: {color: GRID_COLOR} },
-            y: { ticks: { color: textColor }, grid: {color: GRID_COLOR} }
+            x: { type: "time", time: { unit: "hour" }, ticks: { color: textColor }, grid: { color: GRID_COLOR } },
+            y: { ticks: { color: textColor }, grid: { color: GRID_COLOR } }
           }
         }
       });
@@ -527,10 +527,13 @@ class PocasiMeteoCard extends HTMLElement {
             const cx = (chartArea.left + chartArea.right) / 2;
             const cy = (chartArea.top + chartArea.bottom) / 2;
 
-            const radius = Math.min(
-              chartArea.right - chartArea.left,
-              chartArea.bottom - chartArea.top
-            ) * 0.64;
+            const aw = chartArea.right - chartArea.left;
+            const ah = chartArea.bottom - chartArea.top;
+
+            const radius = Math.min(aw, ah) * 0.50;
+
+            const offsetRadius = radius;
+            const offsetText = radius + 10;
 
             ctx.save();
             ctx.fillStyle = textColor;
@@ -540,8 +543,8 @@ class PocasiMeteoCard extends HTMLElement {
 
             WIND_DIR_LABELS.forEach((label, i) => {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
-              const x = cx + Math.cos(angle) * (radius + 4);
-              const y = cy + Math.sin(angle) * (radius + 4);
+              const x = cx + Math.cos(angle) * offsetText;
+              const y = cy + Math.sin(angle) * offsetText;
               ctx.fillText(label, x, y);
             });
 
@@ -557,12 +560,14 @@ class PocasiMeteoCard extends HTMLElement {
             const cx = (chartArea.left + chartArea.right) / 2;
             const cy = (chartArea.top + chartArea.bottom) / 2;
 
-            const radius = Math.min(
-              chartArea.right - chartArea.left,
-              chartArea.bottom - chartArea.top
-            ) * 0.78;
+            const aw = chartArea.right - chartArea.left;
+            const ah = chartArea.bottom - chartArea.top;
 
-            const lineRadius = radius - 55;
+            const radius = Math.min(aw, ah) * 0.50;
+
+            const offsetRadius = radius;
+            const offsetLine = radius - 20;
+            const offsetVar = radius - 10;
 
             const startAngle = (avg - vari - 90) * Math.PI / 180;
             const endAngle = (avg + vari - 90) * Math.PI / 180;
@@ -571,7 +576,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.fillStyle = "rgba(255,165,0,0.25)";
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.arc(cx, cy, radius - 30, startAngle, endAngle);
+            ctx.arc(cx, cy, offsetVar, startAngle, endAngle);
             ctx.closePath();
             ctx.fill();
             ctx.restore();
@@ -582,7 +587,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(avgAngle) * lineRadius, cy + Math.sin(avgAngle) * lineRadius);
+            ctx.lineTo(cx + Math.cos(avgAngle) * offsetLine, cy + Math.sin(avgAngle) * offsetLine);
             ctx.stroke();
             ctx.restore();
 
@@ -592,7 +597,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(modeAngle) * lineRadius, cy + Math.sin(modeAngle) * lineRadius);
+            ctx.lineTo(cx + Math.cos(modeAngle) * offsetLine, cy + Math.sin(modeAngle) * offsetLine);
             ctx.stroke();
             ctx.restore();
           }
@@ -623,7 +628,8 @@ class PocasiMeteoCard extends HTMLElement {
             scales: {
               r: {
                 ticks: { display: false },
-                grid: { color: GRID_COLOR }
+                grid: { color: GRID_COLOR },
+                beginAtZero: true
               }
             },
             plugins: {
