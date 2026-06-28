@@ -530,7 +530,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.70;
+            ) * 0.64;
 
             ctx.save();
             ctx.fillStyle = textColor;
@@ -540,8 +540,8 @@ class PocasiMeteoCard extends HTMLElement {
 
             WIND_DIR_LABELS.forEach((label, i) => {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
-              const x = cx + Math.cos(angle) * (radius + 6);
-              const y = cy + Math.sin(angle) * (radius + 6);
+              const x = cx + Math.cos(angle) * (radius + 4);
+              const y = cy + Math.sin(angle) * (radius + 4);
               ctx.fillText(label, x, y);
             });
 
@@ -560,9 +560,9 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.80;
+            ) * 0.78;
 
-            const lineRadius = radius - 45;
+            const lineRadius = radius - 55;
 
             const startAngle = (avg - vari - 90) * Math.PI / 180;
             const endAngle = (avg + vari - 90) * Math.PI / 180;
@@ -571,7 +571,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.fillStyle = "rgba(255,165,0,0.25)";
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.arc(cx, cy, radius - 20, startAngle, endAngle);
+            ctx.arc(cx, cy, radius - 30, startAngle, endAngle);
             ctx.closePath();
             ctx.fill();
             ctx.restore();
