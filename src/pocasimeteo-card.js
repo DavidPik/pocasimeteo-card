@@ -349,7 +349,10 @@ class PocasiMeteoCard extends HTMLElement {
 
   setConfig(config) {
     if (!config.entity) throw new Error("entity is required");
-    this.config = config;
+    this.config = config {
+      show_graphs: true,
+      hide_sensors: []
+    };
     this.attachShadow({ mode:"open" });
   }
 
@@ -451,9 +454,11 @@ class PocasiMeteoCard extends HTMLElement {
 
     const sensorEntities = Object.keys(hass.states)
       .filter(e => e.startsWith("sensor."+prefix+"_"))
-      .filter(e => VALID_SENSORS.includes(
-        e.replace("sensor."+prefix+"_","").toLowerCase()
-      ));
+      .filter(e => {
+          const suffix = e.replace("sensor."+prefix+"_","").toLowerCase();
+          return VALID_SENSORS.includes(suffix)
+              && !this.config.hide_sensors.includes(suffix);
+      });
 
     const header = this.shadowRoot.getElementById("header");
     const temp = this.shadowRoot.getElementById("temp");
@@ -480,6 +485,9 @@ class PocasiMeteoCard extends HTMLElement {
     `;
 
     graphs.innerHTML = "";
+    if (this.config.show_graphs === false) {
+      return;   // grafy se nevykreslí
+    }
 
     if (sensorEntities.length === 0) return;
 
