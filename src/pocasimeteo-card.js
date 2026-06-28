@@ -212,15 +212,15 @@ class PocasiMeteoCard extends HTMLElement {
         .pm-graph-tile { 
           background:var(--ha-card-background,#1c1c1c); 
           border-radius:12px; 
-          padding:6px; 
+          padding:4px; 
           box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); 
           display:flex; 
           flex-direction:column; 
         }
         .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; color:var(--primary-text-color,#fff); }
-        .pm-graph { width:100%; height:340px; }
+        .pm-graph { width:100%; height:300px; }
         .pm-legend {
-          margin-top:4px;
+          margin-top:2px;
           display:flex;
           flex-wrap:wrap;
           justify-content:center;
@@ -331,7 +331,7 @@ class PocasiMeteoCard extends HTMLElement {
 
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
-      canvas.height = suffix === "vitrsmer" ? 340 : 220;
+      canvas.height = suffix === "vitrsmer" ? 300 : 220;
 
       const legend = document.createElement("div");
       legend.classList.add("pm-legend");
@@ -668,6 +668,7 @@ class PocasiMeteoCard extends HTMLElement {
           options: {
             responsive: false,
             maintainAspectRatio: false,
+            startAngle: -11.25 * Math.PI /180,
             layout: {
               padding: {
                 top: 40,
