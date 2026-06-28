@@ -554,7 +554,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.82;
+            ) * 0.80;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -609,8 +609,8 @@ class PocasiMeteoCard extends HTMLElement {
             maintainAspectRatio: false,
             layout: {
               padding: {
-                top: 60,
-                bottom: 60,
+                top: 40,
+                bottom: 80,
                 left: 10,
                 right: 10
               }
@@ -627,10 +627,10 @@ class PocasiMeteoCard extends HTMLElement {
                 labels: {
                   // posun legendy níž jen u WindRose
                   usePointStyle: true,
-                  pointStyle: 'rectRounded',
+                  pointStyle: 'rect',
                   textAlign: 'center',
                   // klíčová úprava:
-                  padding: 60,
+                  padding: 20,
                   boxWidth: 20,
                   color: textColor,
                   font: {
