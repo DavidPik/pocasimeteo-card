@@ -226,7 +226,7 @@ function createLineChartConfig(points, cleanName, color, textColor) {
 }
 
 /* === RUČNÍ WINDROSE PLUGIN === */
-function createWindRosePlugin(textColor, bins, avg, mode, vari) {
+function createWindRosePlugin(theme, bins, avg, mode, vari) {
   return {
     id:"windRoseManual",
     beforeInit(chart) {
@@ -330,7 +330,7 @@ function createWindRosePlugin(textColor, bins, avg, mode, vari) {
       }
 
       /* === 4) POPISKY SMĚRŮ === */
-      ctx.fillStyle = textColor;
+      ctx.fillStyle = theme.textColor;
       ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -713,7 +713,7 @@ class PocasiMeteoCard extends HTMLElement {
         const mode = Number(entity.attributes.VitrSmer_mode || 0);
         const vari = Number(entity.attributes.VitrSmer_var || 0);
 
-        const windRosePlugin = createWindRosePlugin(theme.textColor, bins, avg, mode, vari);
+        const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
 
         /* === PolarArea jako prázdný kontejner === */
         this._charts[windSensor] = new Chart(ctx, {
