@@ -212,7 +212,7 @@ function createWindRosePlugin(textColor, bins, avg, mode, vari) {
 
       for (let i=0; i<16; i++) {
         const binValue = bins[i];
-        const radius = (binValue / maxBin) * R;
+        const radius = (binValue / maxBin) * (R * 0.90);
 
         // centrovaný úhel sektoru
         const midAngle = ((i * 22.5) - 90) * Math.PI / 180;
@@ -223,7 +223,15 @@ function createWindRosePlugin(textColor, bins, avg, mode, vari) {
         ctx.moveTo(cx, cy);
         ctx.arc(cx, cy, radius, startAngle, endAngle);
         ctx.closePath();
+
+        // výplň
+        ctx.fillStyle = "rgba(76,175,80,0.85)";
         ctx.fill();
+
+        // obrys
+        ctx.strokeStyle = "rgba(0,0,0,0.35)";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
       }
 
       /* === 4) POPISKY SMĚRŮ === */
