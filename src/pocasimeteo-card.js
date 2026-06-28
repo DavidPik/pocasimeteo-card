@@ -351,7 +351,8 @@ class PocasiMeteoCard extends HTMLElement {
     if (!config.entity) throw new Error("entity is required");
     this.config = config {
       show_graphs: true,
-      hide_sensors: []
+      hide_sensors: [],
+      ...config
     };
     this.attachShadow({ mode:"open" });
   }
