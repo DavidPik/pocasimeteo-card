@@ -526,7 +526,7 @@ class PocasiMeteoCard extends HTMLElement {
       tile.appendChild(legend);
       graphs.appendChild(tile);
 
-      canvases[sensor] = { canvas, tile, cleanName, legend };
+      canvases[sensor] = { canvas, tile, prettyName, legend };
     }
 
     const history = {};
@@ -568,7 +568,7 @@ class PocasiMeteoCard extends HTMLElement {
       const points = historyToPoints(history[sensor][0]);
       if (points.length < 2) continue;
 
-      const { canvas, tile, cleanName, legend } = canvases[sensor];
+      const { canvas, tile, prettyName, legend } = canvases[sensor];
       const ctx = canvas.getContext("2d");
 
       if (this._charts[sensor]) this._charts[sensor].destroy();
@@ -579,7 +579,7 @@ class PocasiMeteoCard extends HTMLElement {
       const { min, max } = computeMinMax(points);
       const color = COLOR_MAP[suffix] || "#3b82f6";
 
-      this._charts[sensor] = new Chart(ctx, createLineChartConfig(points, cleanName, color, theme.textColor));
+      this._charts[sensor] = new Chart(ctx, createLineChartConfig(points, prettyName, color, theme.textColor));
 
       legend.innerHTML = `
         <div class="pm-legend-item">
@@ -599,7 +599,7 @@ class PocasiMeteoCard extends HTMLElement {
     if (windSensor && history[windSensor] && history[windSensor][0] && history[windSensor][0].length) {
       const points = historyToPoints(history[windSensor][0]);
       if (points.length >= 2) {
-        const { canvas, tile, cleanName, legend } = canvases[windSensor];
+        const { canvas, tile, prettyName, legend } = canvases[windSensor];
         const ctx = canvas.getContext("2d");
 
         if (this._charts[windSensor]) this._charts[windSensor].destroy();
