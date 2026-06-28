@@ -1,4 +1,4 @@
-/*  =======  POCASIMETEO CARD – VERZE S WINDROSE + AVG/MODE/VAR =======  */
+/*  =======  POCASIMETEO CARD – VERZE S WINDROSE + AVG/MODE/VAR (OPTIMALIZOVANÁ VERZE) =======  */
 
 import {
   Chart,
@@ -50,9 +50,7 @@ const VALID_SENSORS = [
   "vitrsmer"
 ];
 
-const NON_GRAPH_SENSORS = [
-  "srazkyden"
-];
+const NON_GRAPH_SENSORS = ["srazkyden"];
 
 /* === COLOR_MAP musí být OBJEKT, nikoli pole === */
 const COLOR_MAP = {
@@ -82,7 +80,7 @@ const WIND_DIR_LABELS = [
   "S","SSW","SW","WSW","W","WNW","NW","NNW"
 ];
 
-/* === FUNKCE: bezpečné čtení CSS proměnných s fallbackem === */
+/* === UTIL: bezpečné čtení CSS proměnných s fallbackem === */
 function safeCssVar(el, name, fallback) {
   try {
     const v = getComputedStyle(el).getPropertyValue(name).trim();
@@ -92,26 +90,40 @@ function safeCssVar(el, name, fallback) {
   }
 }
 
-/* === FUNKCE: detekce světlého/tmavého tématu === */
+/* === UTIL: detekce světlého/tmavého tématu === */
 function isLightTheme(el) {
   const b = safeCssVar(el, "--brightness", "0");
   return b.trim() === "1";
 }
 
-/* === FUNKCE: převod stupňů na světovou stranu === */
-function degToDirection(deg) {
-  if (deg == null || isNaN(deg)) return "";
-  const dirs = WIND_DIR_LABELS;
-  const idx = Math.round(deg / 22.5) % 16;
-  return dirs[idx];
+/* === UTIL: výpočet barev tématu pro graf === */
+function computeTheme(host) {
+  const light = isLightTheme(host);
+  const textColor =
+    safeCssVar(host, "--primary-text-color", null) ||
+    (light ? "#000000" : "#ffffff");
+
+  const bgColor =
+    safeCssVar(host, "--ha-card-background", "") ||
+    safeCssVar(host, "--card-background-color", "") ||
+    (light ? "#ffffff" : "#1c1c1c");
+
+  return { textColor, bgColor };
 }
 
-/* === FUNKCE: index směru === */
+/* === UTIL: převod stupňů na světovou stranu === */
+function degToDirection(deg) {
+  if (deg == null || isNaN(deg)) return "";
+  const idx = Math.round(deg / 22.5) % 16;
+  return WIND_DIR_LABELS[idx];
+}
+
+/* === UTIL: index směru === */
 function directionToIndex(deg) {
   return Math.round(deg / 22.5) % 16;
 }
 
-/* === FUNKCE: vytvoření histogramu pro WindRose === */
+/* === UTIL: vytvoření histogramu pro WindRose === */
 function buildWindRose(points) {
   const bins = new Array(16).fill(0);
   for (const p of points) {
@@ -121,6 +133,196 @@ function buildWindRose(points) {
     bins[idx]++;
   }
   return bins;
+}
+
+/* === UTIL: převod historie na body === */
+function historyToPoints(raw) {
+  return raw
+    .map(p => ({
+      x: Date.parse(p.last_changed),
+      y: Number(p.state)
+    }))
+    .filter(p => !isNaN(p.x) && !isNaN(p.y));
+}
+
+/* === UTIL: min/max + body === */
+function computeMinMax(points) {
+  const ys = points.map(p => p.y);
+  const min = Math.min(...ys);
+  const max = Math.max(...ys);
+  const minPoint = points.find(p => p.y === min);
+  const maxPoint = points.find(p => p.y === max);
+  return { min, max, minPoint, maxPoint };
+}
+
+/* === UTIL: geometrie grafu === */
+function computeChartGeometry(chartArea) {
+  const cx = (chartArea.left + chartArea.right) / 2;
+  const cy = (chartArea.top + chartArea.bottom) / 2;
+  const aw = chartArea.right - chartArea.left;
+  const ah = chartArea.bottom - chartArea.top;
+  const R = Math.min(aw, ah) * 0.50;
+  return { cx, cy, aw, ah, R };
+}
+
+/* === UTIL: konfigurace lineárního grafu === */
+function createLineChartConfig(points, cleanName, color, textColor) {
+  const { min, max, minPoint, maxPoint } = computeMinMax(points);
+  const rgba = hexToRgba(color, 0.25);
+
+  return {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: cleanName,
+          data: points,
+          borderColor: color,
+          backgroundColor: rgba,
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 2,
+          order: 1
+        },
+        {
+          label: `Min: ${min.toFixed(1)}`,
+          data: [{ x: minPoint.x, y: minPoint.y }],
+          pointRadius: 6,
+          pointBackgroundColor: "red",
+          showLine: false,
+          order: 99
+        },
+        {
+          label: `Max: ${max.toFixed(1)}`,
+          data: [{ x: maxPoint.x, y: maxPoint.y }],
+          pointRadius: 6,
+          pointBackgroundColor: "green",
+          showLine: false,
+          order: 99
+        }
+      ]
+    },
+    options: {
+      responsive: false,
+      maintainAspectRatio: false,
+      plugins: {
+        tooltip: {},
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          type: "time",
+          time: { unit: "hour" },
+          ticks: { color: textColor },
+          grid: { color: GRID_COLOR }
+        },
+        y: {
+          ticks: { color: textColor },
+          grid: { color: GRID_COLOR }
+        }
+      }
+    }
+  };
+}
+
+/* === UTIL: převod HEX na RGBA === */
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/* === JEDEN PLUGIN PRO CELÝ WINDROSE (GRID + LABELY + AVG/MODE/VAR) === */
+function createWindRosePlugin(textColor, avg, mode, vari) {
+  return {
+    id: "windRose",
+    afterDraw(chart) {
+      const { ctx, chartArea } = chart;
+      const { cx, cy, R } = computeChartGeometry(chartArea);
+
+      ctx.save();
+      ctx.strokeStyle = GRID_COLOR;
+      ctx.lineWidth = 1;
+
+      // kružnice gridu (bez poslední R)
+      const gridRadii = [0.15, 0.30, 0.45, 0.60, 0.75, 0.90].map(f => R * f);
+      gridRadii.forEach(r => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+
+      // kříž do hlavních směrů
+      [0, 90, 180, 270].forEach(deg => {
+        const angle = (deg - 90) * Math.PI / 180;
+        const x = cx + Math.cos(angle) * R;
+        const y = cy + Math.sin(angle) * R;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      });
+
+      ctx.restore();
+
+      // popisky směrů
+      const offsetText = R + 10;
+      ctx.save();
+      ctx.fillStyle = textColor;
+      ctx.font = "14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      WIND_DIR_LABELS.forEach((label, i) => {
+        const angle = (i * 22.5 - 90) * Math.PI / 180;
+        const x = cx + Math.cos(angle) * offsetText;
+        const y = cy + Math.sin(angle) * offsetText;
+        ctx.fillText(label, x, y);
+      });
+
+      ctx.restore();
+
+      // AVG / MODE / VAR
+      const offsetLine = R - 20;
+      const offsetVar = R - 10;
+
+      const startAngle = (avg - vari - 90) * Math.PI / 180;
+      const endAngle = (avg + vari - 90) * Math.PI / 180;
+
+      // VAR sektor
+      ctx.save();
+      ctx.fillStyle = "rgba(255,165,0,0.25)";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, offsetVar, startAngle, endAngle);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // AVG čára
+      const avgAngle = (avg - 90) * Math.PI / 180;
+      ctx.save();
+      ctx.strokeStyle = "#ff0000";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(avgAngle) * offsetLine, cy + Math.sin(avgAngle) * offsetLine);
+      ctx.stroke();
+      ctx.restore();
+
+      // MODE čára
+      const modeAngle = (mode - 90) * Math.PI / 180;
+      ctx.save();
+      ctx.strokeStyle = "#0000ff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(modeAngle) * offsetLine, cy + Math.sin(modeAngle) * offsetLine);
+      ctx.stroke();
+      ctx.restore();
+    }
+  };
 }
 
 class PocasiMeteoCard extends HTMLElement {
@@ -373,20 +575,16 @@ class PocasiMeteoCard extends HTMLElement {
       } catch (e) {}
     }));
 
+    const host = this.shadowRoot.host;
+    const theme = computeTheme(host);
+
     // standardní grafy (bez vitrsmer)
     for (const sensor of orderedSensors) {
       const suffix = sensor.replace("sensor." + prefix + "_", "").toLowerCase();
       if (suffix === "vitrsmer") continue;
       if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
 
-      const raw = history[sensor][0];
-      const points = raw
-        .map(p => ({
-          x: Date.parse(p.last_changed),
-          y: Number(p.state)
-        }))
-        .filter(p => !isNaN(p.x) && !isNaN(p.y));
-
+      const points = historyToPoints(history[sensor][0]);
       if (points.length < 2) continue;
 
       const { canvas, tile, cleanName, legend } = canvases[sensor];
@@ -394,74 +592,13 @@ class PocasiMeteoCard extends HTMLElement {
 
       if (this._charts[sensor]) this._charts[sensor].destroy();
 
-      const host = this.shadowRoot.host;
+      canvas.style.backgroundColor = theme.bgColor;
+      tile.style.backgroundColor = theme.bgColor;
 
-      const textColor =
-        safeCssVar(host, "--primary-text-color", null) ||
-        (isLightTheme(host) ? "#000000" : "#ffffff");
-
-      const bgColor =
-        safeCssVar(host, "--ha-card-background", "") ||
-        safeCssVar(host, "--card-background-color", "") ||
-        (isLightTheme(host) ? "#ffffff" : "#1c1c1c");
-
-      canvas.style.backgroundColor = bgColor;
-      tile.style.backgroundColor = bgColor;
-
-      const min = Math.min(...points.map(p => p.y));
-      const max = Math.max(...points.map(p => p.y));
-
-      const minPoint = points.find(p => p.y === min);
-      const maxPoint = points.find(p => p.y === max);
-
+      const { min, max } = computeMinMax(points);
       const color = COLOR_MAP[suffix] || "#3b82f6";
-      const rgba = this._hexToRgba(color, 0.25);
 
-      this._charts[sensor] = new Chart(ctx, {
-        type: "line",
-        data: {
-          datasets: [
-            {
-              label: cleanName,
-              data: points,
-              borderColor: color,
-              backgroundColor: rgba,
-              tension: 0.3,
-              pointRadius: 0,
-              borderWidth: 2,
-              order: 1
-            },
-            {
-              label: `Min: ${min.toFixed(1)}`,
-              data: [{ x: minPoint.x, y: minPoint.y }],
-              pointRadius: 6,
-              pointBackgroundColor: "red",
-              showLine: false,
-              order: 99
-            },
-            {
-              label: `Max: ${max.toFixed(1)}`,
-              data: [{ x: maxPoint.x, y: maxPoint.y }],
-              pointRadius: 6,
-              pointBackgroundColor: "green",
-              showLine: false,
-              order: 99
-            }
-          ]
-        },
-        options: {
-          responsive: false,
-          maintainAspectRatio: false,
-          plugins: {
-            tooltip: {},
-            legend: { display: false }
-          },
-          scales: {
-            x: { type: "time", time: { unit: "hour" }, ticks: { color: textColor }, grid: { color: GRID_COLOR } },
-            y: { ticks: { color: textColor }, grid: { color: GRID_COLOR } }
-          }
-        }
-      });
+      this._charts[sensor] = new Chart(ctx, createLineChartConfig(points, cleanName, color, theme.textColor));
 
       legend.innerHTML = `
         <div class="pm-legend-item">
@@ -474,40 +611,22 @@ class PocasiMeteoCard extends HTMLElement {
         </div>
       `;
     }
-    
-    // WindRose jako prvni dlaždice
+
+    // WindRose jako první dlaždice
     const windSensor = orderedSensors.find(
       s => s.replace("sensor." + prefix + "_", "").toLowerCase() === "vitrsmer"
     );
 
     if (windSensor && history[windSensor] && history[windSensor][0] && history[windSensor][0].length) {
-      const raw = history[windSensor][0];
-      const points = raw
-        .map(p => ({
-          x: Date.parse(p.last_changed),
-          y: Number(p.state)
-        }))
-        .filter(p => !isNaN(p.x) && !isNaN(p.y));
-
+      const points = historyToPoints(history[windSensor][0]);
       if (points.length >= 2) {
         const { canvas, tile, cleanName, legend } = canvases[windSensor];
         const ctx = canvas.getContext("2d");
 
         if (this._charts[windSensor]) this._charts[windSensor].destroy();
 
-        const host = this.shadowRoot.host;
-
-        const textColor =
-          safeCssVar(host, "--primary-text-color", null) ||
-          (isLightTheme(host) ? "#000000" : "#ffffff");
-
-        const bgColor =
-          safeCssVar(host, "--ha-card-background", "") ||
-          safeCssVar(host, "--card-background-color", "") ||
-          (isLightTheme(host) ? "#ffffff" : "#1c1c1c");
-
-        canvas.style.backgroundColor = bgColor;
-        tile.style.backgroundColor = bgColor;
+        canvas.style.backgroundColor = theme.bgColor;
+        tile.style.backgroundColor = theme.bgColor;
 
         const bins = buildWindRose(points);
 
@@ -518,142 +637,8 @@ class PocasiMeteoCard extends HTMLElement {
         const baseColor = "#4caf50";
         const backgroundColors = bins.map(() => baseColor);
 
-        /* === PLUGIN: GRID KRUŽNICE === */
-        const windRoseGridPlugin = {
-          id: "windRoseGrid",
-          afterDraw(chart) {
-            const { ctx, chartArea } = chart;
+        const windRosePlugin = createWindRosePlugin(theme.textColor, avg, mode, vari);
 
-            const cx = (chartArea.left + chartArea.right) / 2;
-            const cy = (chartArea.top + chartArea.bottom) / 2;
-
-            const aw = chartArea.right - chartArea.left;
-            const ah = chartArea.bottom - chartArea.top;
-
-            const R = Math.min(aw, ah) * 0.50;
-
-            const gridRadii = [R * 0.15, R * 0.30, R * 0.45, R * 0.60, R * 0.75, R * 0.90];
-
-            ctx.save();
-            ctx.strokeStyle = GRID_COLOR;
-            ctx.lineWidth = 1;
-
-            gridRadii.forEach(r => {
-              ctx.beginPath();
-              ctx.arc(cx, cy, r, 0, Math.PI * 2);
-              ctx.stroke();
-            });
-
-            const directions = [
-              0,    // East
-              90,   // South
-              180,  // West
-              270   // North
-            ];
-
-            directions.forEach(deg => {
-              const angle = (deg - 90) * Math.PI / 180;
-              const x = cx + Math.cos(angle) * R;
-              const y = cy + Math.sin(angle) * R;
-
-              ctx.beginPath();
-              ctx.moveTo(cx, cy);
-              ctx.lineTo(x, y);
-              ctx.stroke();
-            });
-
-            ctx.restore();
-          }
-        };
-
-        /* === PLUGIN: POPISKY SMĚRŮ === */
-        const windRoseLabelsPlugin = {
-          id: "windRoseLabels",
-          afterDraw(chart) {
-            const { ctx, chartArea } = chart;
-
-            const cx = (chartArea.left + chartArea.right) / 2;
-            const cy = (chartArea.top + chartArea.bottom) / 2;
-
-            const aw = chartArea.right - chartArea.left;
-            const ah = chartArea.bottom - chartArea.top;
-
-            const R = Math.min(aw, ah) * 0.50;
-
-            const offsetText = R + 10;
-
-            ctx.save();
-            ctx.fillStyle = textColor;
-            ctx.font = "14px sans-serif";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-
-            WIND_DIR_LABELS.forEach((label, i) => {
-              const angle = (i * 22.5 - 90) * Math.PI / 180;
-              const x = cx + Math.cos(angle) * offsetText;
-              const y = cy + Math.sin(angle) * offsetText;
-              ctx.fillText(label, x, y);
-            });
-
-            ctx.restore();
-          }
-        };
-
-        /* === PLUGIN: AVG / MODE / VAR === */
-        const windRoseVectorsPlugin = {
-          id: "windRoseVectors",
-          afterDraw(chart) {
-            const { ctx, chartArea } = chart;
-
-            const cx = (chartArea.left + chartArea.right) / 2;
-            const cy = (chartArea.top + chartArea.bottom) / 2;
-
-            const aw = chartArea.right - chartArea.left;
-            const ah = chartArea.bottom - chartArea.top;
-
-            const R = Math.min(aw, ah) * 0.50;
-
-            const offsetLine = R - 20;
-            const offsetVar = R - 10;
-
-            const startAngle = (avg - vari - 90) * Math.PI / 180;
-            const endAngle = (avg + vari - 90) * Math.PI / 180;
-
-            /* VAR sektor */
-            ctx.save();
-            ctx.fillStyle = "rgba(255,165,0,0.25)";
-            ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.arc(cx, cy, offsetVar, startAngle, endAngle);
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-
-            /* AVG čára */
-            const avgAngle = (avg - 90) * Math.PI / 180;
-            ctx.save();
-            ctx.strokeStyle = "#ff0000";
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(avgAngle) * offsetLine, cy + Math.sin(avgAngle) * offsetLine);
-            ctx.stroke();
-            ctx.restore();
-
-            /* MODE čára */
-            const modeAngle = (mode - 90) * Math.PI / 180;
-            ctx.save();
-            ctx.strokeStyle = "#0000ff";
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(modeAngle) * offsetLine, cy + Math.sin(modeAngle) * offsetLine);
-            ctx.stroke();
-            ctx.restore();
-          }
-        };
-
-        /* === VYKRESLENÍ WINDROSE === */
         this._charts[windSensor] = new Chart(ctx, {
           type: "polarArea",
           data: {
@@ -668,7 +653,7 @@ class PocasiMeteoCard extends HTMLElement {
           options: {
             responsive: false,
             maintainAspectRatio: false,
-            startAngle: -11.25 * Math.PI /180,
+            startAngle: -11.25 * Math.PI / 180,
             layout: {
               padding: {
                 top: 20,
@@ -680,7 +665,7 @@ class PocasiMeteoCard extends HTMLElement {
             scales: {
               r: {
                 ticks: { display: false },
-                grid: { display: false },   // vypnutí defaultního gridu
+                grid: { display: false },
                 beginAtZero: true
               }
             },
@@ -692,11 +677,7 @@ class PocasiMeteoCard extends HTMLElement {
               }
             }
           },
-          plugins: [
-            windRoseGridPlugin,
-            windRoseLabelsPlugin,
-            windRoseVectorsPlugin
-          ]
+          plugins: [windRosePlugin]
         });
 
         legend.innerHTML = `
@@ -715,17 +696,14 @@ class PocasiMeteoCard extends HTMLElement {
         `;
       }
     }
-  }  
-
-  _hexToRgba(hex, alpha) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
-  getCardSize() { 
-    return 6; 
+  _hexToRgba(hex, alpha) {
+    return hexToRgba(hex, alpha);
+  }
+
+  getCardSize() {
+    return 6;
   }
 }
 
