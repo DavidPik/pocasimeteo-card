@@ -474,7 +474,7 @@ class PocasiMeteoCard extends HTMLElement {
         </div>
       `;
     }
-
+    
     // WindRose jako prvni dlaždice
     const windSensor = orderedSensors.find(
       s => s.replace("sensor." + prefix + "_", "").toLowerCase() === "vitrsmer"
@@ -516,9 +516,39 @@ class PocasiMeteoCard extends HTMLElement {
         const vari = Number(entity.attributes.VitrSmer_var || 0);
 
         const baseColor = "#4caf50";
-
         const backgroundColors = bins.map(() => baseColor);
 
+        /* === PLUGIN: GRID KRUŽNICE === */
+        const windRoseGridPlugin = {
+          id: "windRoseGrid",
+          afterDraw(chart) {
+            const { ctx, chartArea } = chart;
+
+            const cx = (chartArea.left + chartArea.right) / 2;
+            const cy = (chartArea.top + chartArea.bottom) / 2;
+
+            const aw = chartArea.right - chartArea.left;
+            const ah = chartArea.bottom - chartArea.top;
+
+            const R = Math.min(aw, ah) * 0.50;
+
+            const gridRadii = [R * 0.20, R * 0.40, R * 0.60, R * 0.80, R * 0.90, R];
+
+            ctx.save();
+            ctx.strokeStyle = GRID_COLOR;
+            ctx.lineWidth = 1;
+
+            gridRadii.forEach(r => {
+              ctx.beginPath();
+              ctx.arc(cx, cy, r, 0, Math.PI * 2);
+              ctx.stroke();
+            });
+
+            ctx.restore();
+          }
+        };
+
+        /* === PLUGIN: POPISKY SMĚRŮ === */
         const windRoseLabelsPlugin = {
           id: "windRoseLabels",
           afterDraw(chart) {
@@ -530,10 +560,9 @@ class PocasiMeteoCard extends HTMLElement {
             const aw = chartArea.right - chartArea.left;
             const ah = chartArea.bottom - chartArea.top;
 
-            const radius = Math.min(aw, ah) * 0.50;
+            const R = Math.min(aw, ah) * 0.50;
 
-            const offsetRadius = radius;
-            const offsetText = radius + 10;
+            const offsetText = R + 10;
 
             ctx.save();
             ctx.fillStyle = textColor;
@@ -552,6 +581,7 @@ class PocasiMeteoCard extends HTMLElement {
           }
         };
 
+        /* === PLUGIN: AVG / MODE / VAR === */
         const windRoseVectorsPlugin = {
           id: "windRoseVectors",
           afterDraw(chart) {
@@ -563,15 +593,15 @@ class PocasiMeteoCard extends HTMLElement {
             const aw = chartArea.right - chartArea.left;
             const ah = chartArea.bottom - chartArea.top;
 
-            const radius = Math.min(aw, ah) * 0.50;
+            const R = Math.min(aw, ah) * 0.50;
 
-            const offsetRadius = radius;
-            const offsetLine = radius - 20;
-            const offsetVar = radius - 10;
+            const offsetLine = R - 20;
+            const offsetVar = R - 10;
 
             const startAngle = (avg - vari - 90) * Math.PI / 180;
             const endAngle = (avg + vari - 90) * Math.PI / 180;
 
+            /* VAR sektor */
             ctx.save();
             ctx.fillStyle = "rgba(255,165,0,0.25)";
             ctx.beginPath();
@@ -581,6 +611,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.fill();
             ctx.restore();
 
+            /* AVG čára */
             const avgAngle = (avg - 90) * Math.PI / 180;
             ctx.save();
             ctx.strokeStyle = "#ff0000";
@@ -591,6 +622,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.stroke();
             ctx.restore();
 
+            /* MODE čára */
             const modeAngle = (mode - 90) * Math.PI / 180;
             ctx.save();
             ctx.strokeStyle = "#0000ff";
@@ -603,6 +635,7 @@ class PocasiMeteoCard extends HTMLElement {
           }
         };
 
+        /* === VYKRESLENÍ WINDROSE === */
         this._charts[windSensor] = new Chart(ctx, {
           type: "polarArea",
           data: {
@@ -628,28 +661,23 @@ class PocasiMeteoCard extends HTMLElement {
             scales: {
               r: {
                 ticks: { display: false },
-                grid: { color: GRID_COLOR },
-                beginAtZero: true,
-                max: function(ctx) {
-                  const chartArea = ctx.chart.chartArea;
-                  const aw = chartArea.right - chartArea.left;
-                  const ah = chartArea.bottom - chartArea.top;
-                  const R = Math.min(aw, ah) * 0.50;
-                  return R;
-                }
+                grid: { display: false },   // vypnutí defaultního gridu
+                beginAtZero: true
               }
             },
             plugins: {
               tooltip: {},
               legend: {
                 display: false,
-                labels: {
-                  generateLabels: () => []
-                }
+                labels: { generateLabels: () => [] }
               }
             }
           },
-          plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin]
+          plugins: [
+            windRoseGridPlugin,
+            windRoseLabelsPlugin,
+            windRoseVectorsPlugin
+          ]
         });
 
         legend.innerHTML = `
@@ -668,7 +696,7 @@ class PocasiMeteoCard extends HTMLElement {
         `;
       }
     }
-  }
+  }  
 
   _hexToRgba(hex, alpha) {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -677,7 +705,9 @@ class PocasiMeteoCard extends HTMLElement {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
-  getCardSize() { return 6; }
+  getCardSize() { 
+    return 6; 
+  }
 }
 
 customElements.define("pocasimeteo-card", PocasiMeteoCard);
