@@ -463,7 +463,7 @@ class PocasiMeteoCard extends HTMLElement {
       });
     }
 
-    // WindRose jako poslední dlaždice
+    // WindRose jako prvni dlaždice
     const windSensor = orderedSensors.find(
       s => s.replace("sensor." + prefix + "_", "").toLowerCase() === "vitrsmer"
     );
@@ -520,7 +520,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.68;
+            ) * 0.65;
 
             ctx.save();
             ctx.fillStyle = textColor;
@@ -554,7 +554,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.68;
+            ) * 0.75;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
