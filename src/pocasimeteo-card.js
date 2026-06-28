@@ -626,17 +626,17 @@ class PocasiMeteoCard extends HTMLElement {
                 grid: { color: GRID_COLOR }
               }
             },
-          plugins: {
-            tooltip: {},
-            legend: {
-              display: false,
-              labels: {
-                generateLabels: () => []
+            plugins: {
+              tooltip: {},
+              legend: {
+                display: false,
+                labels: {
+                  generateLabels: () => []
+                }
               }
-            }
-          },
-          plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin]
-        });
+            },
+            plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin]
+          });
 
         legend.innerHTML = `
           <div class="pm-legend-item">
