@@ -69,8 +69,12 @@ const COLOR_MAP = {
   Co2: "#8d6e63",
   Pm1: "#7e57c2",
   Pm2: "#5e35b1",
-  Pm1v: "#9575cd"
+  Pm1v: "#9575cd",
+  VitrSmer: "#3b82f6"
 };
+
+/* === BARVA GRIDU === */
+const GRID_COLOR = "rgba(255,255,255,0.2)";
 
 /* === WINDROSE LABELS === */
 const WIND_DIR_LABELS = [
@@ -215,6 +219,25 @@ class PocasiMeteoCard extends HTMLElement {
         }
         .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; color:var(--primary-text-color,#fff); }
         .pm-graph { width:100%; height:340px; }
+        .pm-legend {
+          margin-top:4px;
+          display:flex;
+          flex-wrap:wrap;
+          justify-content:center;
+          gap:8px;
+          font-size:14px;
+          opacity:0.8;
+        }
+        .pm-legend-item {
+          display:flex;
+          align-items:center;
+          gap:4px;
+        }
+        .pm-legend-color {
+          width:12px;
+          height:12px;
+          border-radius:2px;
+        }
       </style>
 
       <ha-card class="pm-card">
@@ -289,7 +312,6 @@ class PocasiMeteoCard extends HTMLElement {
       ...sensorEntities.filter(s => s.replace("sensor." + prefix + "_", "").toLowerCase() !== "vitrsmer")
     ];
 
-
     const canvases = {};
     for (const sensor of orderedSensors) {
       const suffix = sensor.replace("sensor." + prefix + "_", "");
@@ -311,11 +333,15 @@ class PocasiMeteoCard extends HTMLElement {
       canvas.classList.add("pm-graph");
       canvas.height = suffix === "vitrsmer" ? 340 : 220;
 
+      const legend = document.createElement("div");
+      legend.classList.add("pm-legend");
+
       tile.appendChild(title);
       tile.appendChild(canvas);
+      tile.appendChild(legend);
       graphs.appendChild(tile);
 
-      canvases[sensor] = { canvas, tile, cleanName };
+      canvases[sensor] = { canvas, tile, cleanName, legend };
     }
 
     const history = {};
@@ -363,7 +389,7 @@ class PocasiMeteoCard extends HTMLElement {
 
       if (points.length < 2) continue;
 
-      const { canvas, tile, cleanName } = canvases[sensor];
+      const { canvas, tile, cleanName, legend } = canvases[sensor];
       const ctx = canvas.getContext("2d");
 
       if (this._charts[sensor]) this._charts[sensor].destroy();
@@ -427,41 +453,25 @@ class PocasiMeteoCard extends HTMLElement {
           responsive: false,
           maintainAspectRatio: false,
           plugins: {
-            legend: {
-              position: "bottom",
-              boxWidth: 20,
-              labels: {
-                padding: 12,
-                color: textColor,
-                font: {
-                  size: 14,
-                  color: textColor
-                },
-                generateLabels(chart) {
-                  return [
-                    {
-                      text: `Min: ${min.toFixed(1)}`,
-                      fillStyle: "red",
-                      strokeStyle: "red",
-                      lineWidth: 2
-                    },
-                    {
-                      text: `Max: ${max.toFixed(1)}`,
-                      fillStyle: "green",
-                      strokeStyle: "green",
-                      lineWidth: 2
-                    }
-                  ];
-                }
-              }
-            }
+            tooltip: {}
           },
           scales: {
-            x: { type: "time", time: { unit: "hour" }, ticks: { color: textColor } },
-            y: { ticks: { color: textColor } }
+            x: { type: "time", time: { unit: "hour" }, ticks: { color: textColor }, grid: GRID_COLOR },
+            y: { ticks: { color: textColor }, grid: GRID_COLOR }
           }
         }
       });
+
+      legend.innerHTML = `
+        <div class="pm-legend-item">
+          <span class="pm-legend-color" style="background:red;"></span>
+          <span>Min: ${min.toFixed(1)}</span>
+        </div>
+        <div class="pm-legend-item">
+          <span class="pm-legend-color" style="background:green;"></span>
+          <span>Max: ${max.toFixed(1)}</span>
+        </div>
+      `;
     }
 
     // WindRose jako prvni dlaždice
@@ -479,7 +489,7 @@ class PocasiMeteoCard extends HTMLElement {
         .filter(p => !isNaN(p.x) && !isNaN(p.y));
 
       if (points.length >= 2) {
-        const { canvas, tile, cleanName } = canvases[windSensor];
+        const { canvas, tile, cleanName, legend } = canvases[windSensor];
         const ctx = canvas.getContext("2d");
 
         if (this._charts[windSensor]) this._charts[windSensor].destroy();
@@ -513,15 +523,13 @@ class PocasiMeteoCard extends HTMLElement {
           afterDraw(chart) {
             const { ctx, chartArea } = chart;
 
-            // Střed grafu
             const cx = (chartArea.left + chartArea.right) / 2;
             const cy = (chartArea.top + chartArea.bottom) / 2;
 
-            // Radius musí být menší, aby se popisky vešly
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.88;
+            ) * 0.70;
 
             ctx.save();
             ctx.fillStyle = textColor;
@@ -531,11 +539,8 @@ class PocasiMeteoCard extends HTMLElement {
 
             WIND_DIR_LABELS.forEach((label, i) => {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
-
-              // Popisky dáme dál od středu
-              const x = cx + Math.cos(angle) * (radius + 18);
-              const y = cy + Math.sin(angle) * (radius + 18);
-
+              const x = cx + Math.cos(angle) * (radius + 6);
+              const y = cy + Math.sin(angle) * (radius + 6);
               ctx.fillText(label, x, y);
             });
 
@@ -551,13 +556,13 @@ class PocasiMeteoCard extends HTMLElement {
             const cx = (chartArea.left + chartArea.right) / 2;
             const cy = (chartArea.top + chartArea.bottom) / 2;
 
-            // Stejný radius jako pro popisky
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.88;
+            ) * 0.80;
 
-            // VAR sector
+            const lineRadius = radius - 45;
+
             const startAngle = (avg - vari - 90) * Math.PI / 180;
             const endAngle = (avg + vari - 90) * Math.PI / 180;
 
@@ -570,25 +575,23 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.fill();
             ctx.restore();
 
-            // AVG line
             const avgAngle = (avg - 90) * Math.PI / 180;
             ctx.save();
             ctx.strokeStyle = "#ff0000";
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(avgAngle) * (radius - 25), cy + Math.sin(avgAngle) * (radius - 30));
+            ctx.lineTo(cx + Math.cos(avgAngle) * lineRadius, cy + Math.sin(avgAngle) * lineRadius);
             ctx.stroke();
             ctx.restore();
 
-            // MODE line
             const modeAngle = (mode - 90) * Math.PI / 180;
             ctx.save();
             ctx.strokeStyle = "#0000ff";
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(modeAngle) * (radius - 25), cy + Math.sin(modeAngle) * (radius - 30));
+            ctx.lineTo(cx + Math.cos(modeAngle) * lineRadius, cy + Math.sin(modeAngle) * lineRadius);
             ctx.stroke();
             ctx.restore();
           }
@@ -611,7 +614,7 @@ class PocasiMeteoCard extends HTMLElement {
             layout: {
               padding: {
                 top: 40,
-                bottom: 60,
+                bottom: 40,
                 left: 10,
                 right: 10
               }
@@ -619,53 +622,30 @@ class PocasiMeteoCard extends HTMLElement {
             scales: {
               r: {
                 ticks: { display: false },
-                grid: { color: "rgba(255,255,255,0.2)" }
+                grid: { color: GRID_COLOR }
               }
             },
             plugins: {
-              legend: {
-                position: "bottom",
-                labels: {
-                  // posun legendy níž jen u WindRose
-                  usePointStyle: true,
-                  pointStyle: 'rectRounded',
-                  textAlign: 'center',
-                  // klíčová úprava:
-                  padding: 20,
-                  boxWidth: 20,
-                  color: textColor,
-                  font: {
-                    size: 14,
-                    color: textColor
-                  },
-                  generateLabels(chart) {
-                    return [
-                      {
-                        text: `Avg: ${avg.toFixed(1)}°`,
-                        fillStyle: "#ff0000",
-                        strokeStyle: "#ff0000",
-                        lineWidth: 2
-                      },
-                      {
-                        text: `Mode: ${mode.toFixed(1)}°`,
-                        fillStyle: "#0000ff",
-                        strokeStyle: "#0000ff",
-                        lineWidth: 2
-                      },
-                      {
-                        text: `Var: ±${vari.toFixed(1)}°`,
-                        fillStyle: "rgba(255,165,0,0.25)",
-                        strokeStyle: "rgba(255,165,0,0.25)",
-                        lineWidth: 2
-                      }
-                    ];
-                  }
-                }
-              }
+              tooltip: {}
             }
           },
           plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin]
         });
+
+        legend.innerHTML = `
+          <div class="pm-legend-item">
+            <span class="pm-legend-color" style="background:#ff0000;"></span>
+            <span>Avg: ${avg.toFixed(1)}°</span>
+          </div>
+          <div class="pm-legend-item">
+            <span class="pm-legend-color" style="background:#0000ff;"></span>
+            <span>Mode: ${mode.toFixed(1)}°</span>
+          </div>
+          <div class="pm-legend-item">
+            <span class="pm-legend-color" style="background:rgba(255,165,0,0.8);"></span>
+            <span>Var: ±${vari.toFixed(1)}°</span>
+          </div>
+        `;
       }
     }
   }
