@@ -553,7 +553,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.55;
+            ) * 0.50;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -592,6 +592,30 @@ class PocasiMeteoCard extends HTMLElement {
           }
         };
 
+        const windRoseLegendPlugin = {
+          id: "windRoseLegendPlugin",
+          afterDraw(chart) {
+            const { ctx, chartArea } = chart;
+            const labels = chart.options.plugins.legend.labels.generateLabels(chart);
+
+            ctx.save();
+            ctx.font = "14px sans-serif";
+            ctx.fillStyle = chart.options.plugins.legend.labels.color;
+            ctx.textBaseline = "middle";
+
+            let x = chartArea.left;
+            const y = chartArea.bottom + 20;
+
+            labels.forEach(label => {
+              ctx.fillText(label.text, x, y);
+              x += ctx.measureText(label.text).width + 40;
+            });
+
+            ctx.restore();
+          }
+        };
+
+
         this._charts[windSensor] = new Chart(ctx, {
           type: "polarArea",
           data: {
@@ -608,7 +632,7 @@ class PocasiMeteoCard extends HTMLElement {
             maintainAspectRatio: false,
             layout: {
               padding: {
-                top: 20,
+                top: 35,
                 bottom: 30,
                 left: 10,
                 right: 10
@@ -625,7 +649,7 @@ class PocasiMeteoCard extends HTMLElement {
                 position: "bottom",
                 labels: {
                   color: textColor,
-                  padding: 45,
+                  padding: 12,
                   boxWidth: 20,
                   font: {
                     size: 14,
@@ -657,7 +681,7 @@ class PocasiMeteoCard extends HTMLElement {
               }
             }
           },
-          plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin]
+          plugins: [windRoseLabelsPlugin, windRoseVectorsPlugin, windRoseLegendPlugin]
         });
       }
     }
