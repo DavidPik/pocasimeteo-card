@@ -438,12 +438,6 @@ class PocasiMeteoCard extends HTMLElement {
                 generateLabels(chart) {
                   return [
                     {
-                      text: cleanName,
-                      fillStyle: color,
-                      strokeStyle: color,
-                      lineWidth: 2
-                    },
-                    {
                       text: `Min: ${min.toFixed(1)}`,
                       fillStyle: "red",
                       strokeStyle: "red",
@@ -537,8 +531,8 @@ class PocasiMeteoCard extends HTMLElement {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
 
               // Popisky dáme dál od středu
-              const x = cx + Math.cos(angle) * (radius + 24);
-              const y = cy + Math.sin(angle) * (radius + 24);
+              const x = cx + Math.cos(angle) * (radius + 20);
+              const y = cy + Math.sin(angle) * (radius + 20);
 
               ctx.fillText(label, x, y);
             });
@@ -559,7 +553,7 @@ class PocasiMeteoCard extends HTMLElement {
             const radius = Math.min(
               chartArea.right - chartArea.left,
               chartArea.bottom - chartArea.top
-            ) * 0.58;
+            ) * 0.55;
 
             // VAR sector
             const startAngle = (avg - vari - 90) * Math.PI / 180;
@@ -639,12 +633,6 @@ class PocasiMeteoCard extends HTMLElement {
                   },
                   generateLabels(chart) {
                     return [
-                      {
-                        text: cleanName,
-                        fillStyle: baseColor,
-                        strokeStyle: baseColor,
-                        lineWidth: 2
-                      },
                       {
                         text: `Avg: ${avg.toFixed(1)}°`,
                         fillStyle: "#ff0000",
