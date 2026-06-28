@@ -532,8 +532,8 @@ class PocasiMeteoCard extends HTMLElement {
               const angle = (i * 22.5 - 90) * Math.PI / 180;
 
               // Popisky dáme dál od středu
-              const x = cx + Math.cos(angle) * (radius + 32);
-              const y = cy + Math.sin(angle) * (radius + 32);
+              const x = cx + Math.cos(angle) * (radius + 28);
+              const y = cy + Math.sin(angle) * (radius + 28);
 
               ctx.fillText(label, x, y);
             });
@@ -576,7 +576,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(avgAngle) * radius, cy + Math.sin(avgAngle) * radius);
+            ctx.lineTo(cx + Math.cos(avgAngle) * (radius - 20), cy + Math.sin(avgAngle) * (radius - 20));
             ctx.stroke();
             ctx.restore();
 
@@ -587,7 +587,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + Math.cos(modeAngle) * radius, cy + Math.sin(modeAngle) * radius);
+            ctx.lineTo(cx + Math.cos(modeAngle) * (radius - 20), cy + Math.sin(modeAngle) * (radius - 20));
             ctx.stroke();
             ctx.restore();
           }
@@ -605,7 +605,7 @@ class PocasiMeteoCard extends HTMLElement {
             ctx.textBaseline = "middle";
 
             let x = chartArea.left;
-            const y = chartArea.bottom + 20;
+            const y = chartArea.bottom + 40;
 
             labels.forEach(label => {
               ctx.fillText(label.text, x, y);
