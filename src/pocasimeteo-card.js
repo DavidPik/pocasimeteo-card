@@ -351,7 +351,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       const avgAngle = (avg - 90) * Math.PI / 180;
       const modeAngle = (mode - 90) * Math.PI / 180;
       const startVar = (avg - vari - 90) * Math.PI / 180;
-      const endVar = (avg + vari - 90) * Math.PI / 180;
+      const endVar = (avg + vari - 90 - 0) * Math.PI / 180;
 
       // VAR sektor
       ctx.fillStyle = "rgba(255,165,0,0.25)";
@@ -498,12 +498,80 @@ class PocasiMeteoCard extends HTMLElement {
   _initialize() {
     this.shadowRoot.innerHTML = `
       <style>
-        .pm-card { padding:16px; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:16px; }
-        .pm-header { display:flex; justify-content:space-between; font-size:20px; font-weight:600; }
-        .pm-condition { opacity:0.7; font-size:14px; }
-        .pm-temp { font-size:64px; font-weight:300; }
-        .pm-current { display:flex; flex-wrap:wrap; gap:16px; opacity:0.8; font-size:16px; }
-        .pm-graphs { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; margin-top:8px; }
+        .pm-card {
+          padding:0;
+          color:var(--primary-text-color,#fff);
+          display:flex;
+          flex-direction:column;
+          gap:0;
+        }
+
+        .pm-header-section {
+          padding:16px;
+          background:rgba(255,255,255,0.05);
+          border-bottom:1px solid rgba(255,255,255,0.1);
+          display:flex;
+          flex-direction:column;
+          gap:12px;
+        }
+
+        .pm-header-top {
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-start;
+          font-size:20px;
+          font-weight:600;
+        }
+
+        .pm-header-title {
+          display:flex;
+          flex-direction:column;
+          gap:4px;
+        }
+
+        .pm-header-timestamp {
+          opacity:0.7;
+          font-size:14px;
+        }
+
+        .pm-header-bottom {
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-start;
+          gap:16px;
+        }
+
+        .pm-header-main {
+          font-size:48px;
+          font-weight:300;
+        }
+
+        .pm-header-details {
+          display:flex;
+          flex-direction:column;
+          gap:4px;
+          font-size:16px;
+          opacity:0.85;
+        }
+
+        .pm-primary-section {
+          background:rgba(255,255,255,0.03);
+          padding:16px;
+          border-bottom:1px solid rgba(255,255,255,0.1);
+        }
+
+        .pm-secondary-section {
+          background:rgba(255,255,255,0.05);
+          padding:16px;
+        }
+
+        .pm-graphs {
+          display:grid;
+          grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+          gap:16px;
+          margin-top:8px;
+        }
+
         .pm-graph-tile {
           background:var(--ha-card-background,#1c1c1c);
           border-radius:12px;
@@ -512,6 +580,7 @@ class PocasiMeteoCard extends HTMLElement {
           display:flex;
           flex-direction:column;
         }
+
         .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; }
         .pm-graph { width:100%; height:300px; }
         .pm-legend {
@@ -528,10 +597,24 @@ class PocasiMeteoCard extends HTMLElement {
       </style>
 
       <ha-card class="pm-card">
-        <div id="header"></div>
-        <div id="temp"></div>
-        <div id="current"></div>
-        <div id="graphs" class="pm-graphs"></div>
+        <div id="header-section" class="pm-header-section">
+          <div class="pm-header-top">
+            <div class="pm-header-title" id="header-title"></div>
+            <div class="pm-header-timestamp" id="header-timestamp"></div>
+          </div>
+          <div class="pm-header-bottom">
+            <div class="pm-header-main" id="header-main"></div>
+            <div class="pm-header-details" id="header-details"></div>
+          </div>
+        </div>
+
+        <div class="pm-primary-section">
+          <div id="primary-graphs" class="pm-graphs"></div>
+        </div>
+
+        <div class="pm-secondary-section">
+          <div id="secondary-graphs" class="pm-graphs"></div>
+        </div>
       </ha-card>
     `;
   }
@@ -555,31 +638,30 @@ class PocasiMeteoCard extends HTMLElement {
               && !this.config.hide_sensors.includes(suffix);
       });
 
-    const header = this.shadowRoot.getElementById("header");
-    const temp = this.shadowRoot.getElementById("temp");
-    const current = this.shadowRoot.getElementById("current");
-    const graphs = this.shadowRoot.getElementById("graphs");
+    const headerTitle = this.shadowRoot.getElementById("header-title");
+    const headerTimestamp = this.shadowRoot.getElementById("header-timestamp");
+    const headerMain = this.shadowRoot.getElementById("header-main");
+    const headerDetails = this.shadowRoot.getElementById("header-details");
+    const primaryGraphs = this.shadowRoot.getElementById("primary-graphs");
+    const secondaryGraphs = this.shadowRoot.getElementById("secondary-graphs");
 
     const d = entity.attributes;
 
-    header.innerHTML = `
-      <div class="pm-header">
-        <div>${d.station_name}<br><span class="pm-condition">${d.condition || ""}</span></div>
-        <div style="opacity:0.6;">${d.timestamp}</div>
-      </div>
-    `;
+    headerTitle.innerHTML = `${d.station_name || ""}`;
+    headerTimestamp.innerHTML = `${d.timestamp || ""}`;
 
-    temp.innerHTML = `<div class="pm-temp">${d.TeplotaVnejsi}°</div>`;
+    headerMain.innerHTML = `Teplota vnější: ${d.TeplotaVnejsi}°C`;
 
-    current.innerHTML = `
-      <div>Vlhkost: ${d.VlhkostVnejsi}%</div>
+    headerDetails.innerHTML = `
       <div>Tlak: ${d.TlakRel || ""} hPa</div>
-      <div>Vítr: ${d.Vitr} m/s (${degToDirection(Number(d.VitrSmer))})</div>
+      <div>Vlhkost: ${d.VlhkostVnejsi || ""}%</div>
+      <div>Vítr: ${d.Vitr || ""} m/s (${degToDirection(Number(d.VitrSmer))})</div>
       <div>Srážky dnes: ${d.SrazkyDen || 0} mm</div>
-      <div>Intenzita srážek: ${d.rainIntensity || 0} mm/5min</div>
     `;
 
-    graphs.innerHTML = "";
+    primaryGraphs.innerHTML = "";
+    secondaryGraphs.innerHTML = "";
+
     if (this.config.show_graphs === false) {
       return;   // grafy se nevykreslí
     }
@@ -596,21 +678,47 @@ class PocasiMeteoCard extends HTMLElement {
 
     const since = new Date(Date.now() - 24*3600*1000).toISOString();
 
-    const orderedSensors = [
-      ...sensorEntities.filter(s => s.endsWith("vitrsmer")),
-      ...sensorEntities.filter(s => !s.endsWith("vitrsmer"))
-    ];
+    // seznam základních/doplňkových senzorů z integrace (varianta A)
+    const primaryAttr = Array.isArray(d.primary_sensors) ? d.primary_sensors : [];
+    const secondaryAttr = Array.isArray(d.secondary_sensors) ? d.secondary_sensors : [];
+
+    const primaryList = primaryAttr.map(s => String(s).toLowerCase());
+    const secondaryList = secondaryAttr.map(s => String(s).toLowerCase());
+
+    // fallback: pokud integrace zatím neposkytuje seznamy, použijeme původní pořadí
+    let orderedSensors;
+    if (primaryList.length === 0 && secondaryList.length === 0) {
+      orderedSensors = [
+        ...sensorEntities.filter(s => s.endsWith("vitrsmer")),
+        ...sensorEntities.filter(s => !s.endsWith("vitrsmer"))
+      ];
+    } else {
+      const primarySensors = [];
+      const secondarySensors = [];
+
+      for (const sensor of sensorEntities) {
+        const suffix = sensor.replace("sensor."+prefix+"_","").toLowerCase();
+        if (primaryList.includes(suffix)) primarySensors.push(sensor);
+        else if (secondaryList.includes(suffix)) secondarySensors.push(sensor);
+        else secondarySensors.push(sensor);
+      }
+
+      orderedSensors = [...primarySensors, ...secondarySensors];
+    }
 
     const canvases = {};
+    const history = {};
+
+    // vytvoření dlaždic pro grafy – rozdělení na primary/secondary sekci
     for (const sensor of orderedSensors) {
       const suffix = sensor.replace("sensor."+prefix+"_","");
+      const suffixLower = suffix.toLowerCase();
 
       const tile = document.createElement("div");
       tile.classList.add("pm-graph-tile");
 
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
-      const suffixLower = suffix.toLowerCase();
       const prettyName = TITLE_MAP[suffixLower] || suffix;
 
       const title = document.createElement("div");
@@ -619,7 +727,7 @@ class PocasiMeteoCard extends HTMLElement {
 
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
-      canvas.height = suffix === "vitrsmer" ? 300 : 220;
+      canvas.height = suffixLower === "vitrsmer" ? 300 : 220;
 
       const legend = document.createElement("div");
       legend.classList.add("pm-legend");
@@ -627,12 +735,17 @@ class PocasiMeteoCard extends HTMLElement {
       tile.appendChild(title);
       tile.appendChild(canvas);
       tile.appendChild(legend);
-      graphs.appendChild(tile);
+
+      // rozhodnutí, kam dlaždici umístit
+      const isPrimary = primaryList.length > 0 && primaryList.includes(suffixLower);
+      if (isPrimary) {
+        primaryGraphs.appendChild(tile);
+      } else {
+        secondaryGraphs.appendChild(tile);
+      }
 
       canvases[sensor] = { canvas, tile, prettyName, legend };
     }
-
-    const history = {};
 
     await Promise.all(orderedSensors.map(async sensor => {
       const suffix = sensor.replace("sensor."+prefix+"_","").toLowerCase();
