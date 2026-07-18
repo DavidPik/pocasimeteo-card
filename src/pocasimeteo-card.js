@@ -72,30 +72,21 @@ const TITLE_MAP = {
 
 /* === BARVY === */
 const COLOR_MAP = {
-  /* === Teplota === */
-  teplotavnejsi: "#ff6b3d",   // jasná oranžová (venkovní)
-  teplotavnitrni: "#ffa86b",  // světlejší oranžová (vnitřní)
-  /* === Vlhkost === */
-  vlhkostvnejsi: "#1e88e5",   // sytá modrá (venkovní)
-  vlhkostvnitrni: "#64b5f6",  // světlejší modrá (vnitřní)
-  /* === Tlak === */
-  tlakrel: "#8e24aa",         // fialová
-  /* === Vítr === */
-  vitr: "#43a047",            // základní zelená
-  vitrnarazy: "#2e7d32",      // tmavší zelená (nárazy)
-  vitrsmer: "#009688",        // tyrkysová (směr) – odlišná od vlhkosti
-  /* === Srážky === */
-  rainintensity: "#0288d1",   // modrá s nádechem do aqua
-  /* === Slunce === */
-  slunzareni: "#ffb300",      // jasná žlutá/oranžová
-  /* === UV === */
-  uvindex: "#fdd835",         // žlutá
-  /* === CO₂ === */
-  co2: "#6d4c41",             // hnědá
-  /* === Prach === */
-  pm1: "#7e57c2",             // světlejší fialová
-  pm2: "#5e35b1",             // tmavší fialová
-  pm1v: "#9575cd"             // pastelová fialová
+  teplotavnejsi: "#ff6b3d",
+  teplotavnitrni: "#ffa86b",
+  vlhkostvnejsi: "#1e88e5",
+  vlhkostvnitrni: "#64b5f6",
+  tlakrel: "#8e24aa",
+  vitr: "#43a047",
+  vitrnarazy: "#2e7d32",
+  vitrsmer: "#009688",
+  rainintensity: "#0288d1",
+  slunzareni: "#ffb300",
+  uvindex: "#fdd835",
+  co2: "#6d4c41",
+  pm1: "#7e57c2",
+  pm2: "#5e35b1",
+  pm1v: "#9575cd"
 };
 
 const GRID_COLOR = "rgba(255,255,255,0.2)";
@@ -225,7 +216,7 @@ function createLineChartConfig(points, cleanName, color, textColor) {
   };
 }
 
-/* === RUČNÍ WINDROSE PLUGIN === */
+/* === WINDROSE PLUGIN === */
 function createWindRosePlugin(theme, bins, avg, mode, vari) {
   return {
     id:"windRoseManual",
@@ -245,19 +236,16 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         const dy = chart.$mouse.y - cy;
         const dist = Math.sqrt(dx*dx + dy*dy);
 
-        // mimo graf
         if (dist > R) {
           chart.$windHover = null;
           chart.draw();
           return;
         }
 
-        // úhel kurzoru
         let angle = Math.atan2(dy, dx) * 180 / Math.PI;
         angle += 90;
         if (angle < 0) angle += 360;
 
-        // index sektoru
         const sectorIndex = Math.floor(angle / 22.5) % 16;
 
         chart.$windHover = {
@@ -282,7 +270,6 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       const maxBin = Math.max(...bins) || 1;
       const sectorAngle = 22.5 * Math.PI / 180;
 
-      /* === 1) GRID KRUŽNICE === */
       ctx.save();
       ctx.strokeStyle = GRID_COLOR;
       ctx.lineWidth = 1;
@@ -293,7 +280,6 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.stroke();
       });
 
-      /* === 2) KŘÍŽ === */
       [0,90,180,270].forEach(deg => {
         const a = (deg - 90) * Math.PI / 180;
         ctx.beginPath();
@@ -302,14 +288,12 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.stroke();
       });
 
-      /* === 3) RUČNÍ VÝSEČE === */
       const sectorColor = COLOR_MAP["vitrsmer"] || "#3b82f6";
 
       for (let i=0; i<16; i++) {
         const binValue = bins[i];
         const radius = (binValue / maxBin) * (R * 0.90);
 
-        // centrovaný úhel sektoru
         const midAngle = ((i * 22.5) - 90) * Math.PI / 180;
         const startAngle = midAngle - sectorAngle/2;
         const endAngle = midAngle + sectorAngle/2;
@@ -319,17 +303,14 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.arc(cx, cy, radius, startAngle, endAngle);
         ctx.closePath();
 
-        // výplň
         ctx.fillStyle = hexToRgba(sectorColor, 0.85);
         ctx.fill();
 
-        // obrys
         ctx.strokeStyle = "rgba(0,0,0,0.35)";
         ctx.lineWidth = 1.2;
         ctx.stroke();
       }
 
-      /* === 4) POPISKY SMĚRŮ === */
       ctx.fillStyle = theme.textColor;
       ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
@@ -344,16 +325,14 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.fillText(label, x, y);
       });
 
-      /* === 5) AVG / MODE / VAR === */
       const offsetLine = R - 20;
       const offsetVar = R - 10;
 
       const avgAngle = (avg - 90) * Math.PI / 180;
       const modeAngle = (mode - 90) * Math.PI / 180;
       const startVar = (avg - vari - 90) * Math.PI / 180;
-      const endVar = (avg + vari - 90 - 0) * Math.PI / 180;
+      const endVar = (avg + vari - 90) * Math.PI / 180;
 
-      // VAR sektor
       ctx.fillStyle = "rgba(255,165,0,0.25)";
       ctx.beginPath();
       ctx.moveTo(cx, cy);
@@ -361,7 +340,6 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       ctx.closePath();
       ctx.fill();
 
-      // AVG čára
       ctx.strokeStyle = "#ff0000";
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -369,60 +347,11 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       ctx.lineTo(cx + Math.cos(avgAngle)*offsetLine, cy + Math.sin(avgAngle)*offsetLine);
       ctx.stroke();
 
-      // MODE čára
       ctx.strokeStyle = "#0000ff";
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(cx + Math.cos(modeAngle)*offsetLine, cy + Math.sin(modeAngle)*offsetLine);
       ctx.stroke();
-
-      // === TOOLTIP ===
-      if (chart.$windHover && chart.$mouse) {
-        const { index, value } = chart.$windHover;
-        const { x: mx, y: my } = chart.$mouse;
-
-        const label = WIND_DIR_LABELS[index];
-        const percent = ((value / maxBin) * 100).toFixed(1);
-        const tooltipText = `${label}: ${value}× (${percent}%)`;
-
-        ctx.save();
-
-        // === Chart.js tooltip style ===
-        ctx.font = "12px sans-serif";
-        ctx.textBaseline = "middle";
-        ctx.textAlign = "left";
-
-        const paddingX = 8;
-        const paddingY = 6;
-
-        const textWidth = ctx.measureText(tooltipText).width;
-        const boxWidth = textWidth + paddingX * 2;
-        const boxHeight = 20; // Chart.js default tooltip height
-
-        // Position near cursor
-        let tx = mx + 10;
-        let ty = my - boxHeight - 10;
-
-        // Prevent overflow
-        if (tx + boxWidth > chart.width) tx = chart.width - boxWidth - 4;
-        if (ty < chart.chartArea.top) ty = my + 10;
-
-        // Background
-        ctx.fillStyle = theme.bgColor + "f0"; // Chart.js-like opacity
-        ctx.strokeStyle = theme.textColor + "80";
-        ctx.lineWidth = 1.5;
-
-        ctx.beginPath();
-        ctx.roundRect(tx, ty, boxWidth, boxHeight, 4);
-        ctx.fill();
-        ctx.stroke();
-
-        // Text
-        ctx.fillStyle = theme.textColor;
-        ctx.fillText(tooltipText, tx + paddingX, ty + boxHeight / 2);
-
-        ctx.restore();
-      }
 
       ctx.restore();
     }
@@ -561,322 +490,3 @@ class PocasiMeteoCard extends HTMLElement {
         }
 
         .pm-secondary-section {
-          background:rgba(255,255,255,0.05);
-          padding:16px;
-        }
-
-        .pm-graphs {
-          display:grid;
-          grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
-          gap:16px;
-          margin-top:8px;
-        }
-
-        .pm-graph-tile {
-          background:var(--ha-card-background,#1c1c1c);
-          border-radius:12px;
-          padding:4px;
-          box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2));
-          display:flex;
-          flex-direction:column;
-        }
-
-        .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; }
-        .pm-graph { width:100%; height:300px; }
-        .pm-legend {
-          margin-top:0px;
-          display:flex;
-          flex-wrap:wrap;
-          justify-content:center;
-          gap:8px;
-          font-size:14px;
-          opacity:0.8;
-        }
-        .pm-legend-item { display:flex; align-items:center; gap:4px; }
-        .pm-legend-color { width:12px; height:12px; border-radius:2px; }
-      </style>
-
-      <ha-card class="pm-card">
-        <div id="header-section" class="pm-header-section">
-          <div class="pm-header-top">
-            <div class="pm-header-title" id="header-title"></div>
-            <div class="pm-header-timestamp" id="header-timestamp"></div>
-          </div>
-          <div class="pm-header-bottom">
-            <div class="pm-header-main" id="header-main"></div>
-            <div class="pm-header-details" id="header-details"></div>
-          </div>
-        </div>
-
-        <div class="pm-primary-section">
-          <div id="primary-graphs" class="pm-graphs"></div>
-        </div>
-
-        <div class="pm-secondary-section">
-          <div id="secondary-graphs" class="pm-graphs"></div>
-        </div>
-      </ha-card>
-    `;
-  }
-
-  async _update(hass) {
-    const entity = hass.states[this.config.entity];
-    if (!entity) return;
-
-    const nowTs = Date.now();
-    if (nowTs - this._lastFetch < 30000) return;
-    this._lastFetch = nowTs;
-
-    const prefix = (entity.attributes.station_name || "")
-      .toLowerCase().replace(/\s+/g,"_");
-
-    const sensorEntities = Object.keys(hass.states)
-      .filter(e => e.startsWith("sensor."+prefix+"_"))
-      .filter(e => {
-          const suffix = e.replace("sensor."+prefix+"_","").toLowerCase();
-          return VALID_SENSORS.includes(suffix)
-              && !this.config.hide_sensors.includes(suffix);
-      });
-
-    const headerTitle = this.shadowRoot.getElementById("header-title");
-    const headerTimestamp = this.shadowRoot.getElementById("header-timestamp");
-    const headerMain = this.shadowRoot.getElementById("header-main");
-    const headerDetails = this.shadowRoot.getElementById("header-details");
-    const primaryGraphs = this.shadowRoot.getElementById("primary-graphs");
-    const secondaryGraphs = this.shadowRoot.getElementById("secondary-graphs");
-
-    const d = entity.attributes;
-
-    headerTitle.innerHTML = `${d.station_name || ""}`;
-    headerTimestamp.innerHTML = `${d.timestamp || ""}`;
-
-    headerMain.innerHTML = `Teplota vnější: ${d.TeplotaVnejsi}°C`;
-
-    headerDetails.innerHTML = `
-      <div>Tlak: ${d.TlakRel || ""} hPa</div>
-      <div>Vlhkost: ${d.VlhkostVnejsi || ""}%</div>
-      <div>Vítr: ${d.Vitr || ""} m/s (${degToDirection(Number(d.VitrSmer))})</div>
-      <div>Srážky dnes: ${d.SrazkyDen || 0} mm</div>
-    `;
-
-    primaryGraphs.innerHTML = "";
-    secondaryGraphs.innerHTML = "";
-
-    if (this.config.show_graphs === false) {
-      return;   // grafy se nevykreslí
-    }
-
-    if (sensorEntities.length === 0) return;
-
-    const token =
-      hass.connection?.options?.accessToken ||
-      hass.auth?.data?.access_token ||
-      hass.connection?.options?.auth?.access_token ||
-      null;
-
-    if (!token) return;
-
-    const since = new Date(Date.now() - 24*3600*1000).toISOString();
-
-    // seznam základních/doplňkových senzorů z integrace (varianta A)
-    const primaryAttr = Array.isArray(d.primary_sensors) ? d.primary_sensors : [];
-    const secondaryAttr = Array.isArray(d.secondary_sensors) ? d.secondary_sensors : [];
-
-    const primaryList = primaryAttr.map(s => String(s).toLowerCase());
-    const secondaryList = secondaryAttr.map(s => String(s).toLowerCase());
-
-    // fallback: pokud integrace zatím neposkytuje seznamy, použijeme původní pořadí
-    let orderedSensors;
-    if (primaryList.length === 0 && secondaryList.length === 0) {
-      orderedSensors = [
-        ...sensorEntities.filter(s => s.endsWith("vitrsmer")),
-        ...sensorEntities.filter(s => !s.endsWith("vitrsmer"))
-      ];
-    } else {
-      const primarySensors = [];
-      const secondarySensors = [];
-
-      for (const sensor of sensorEntities) {
-        const suffix = sensor.replace("sensor."+prefix+"_","").toLowerCase();
-        if (primaryList.includes(suffix)) primarySensors.push(sensor);
-        else if (secondaryList.includes(suffix)) secondarySensors.push(sensor);
-        else secondarySensors.push(sensor);
-      }
-
-      orderedSensors = [...primarySensors, ...secondarySensors];
-    }
-
-    const canvases = {};
-    const history = {};
-
-    // vytvoření dlaždic pro grafy – rozdělení na primary/secondary sekci
-    for (const sensor of orderedSensors) {
-      const suffix = sensor.replace("sensor."+prefix+"_","");
-      const suffixLower = suffix.toLowerCase();
-
-      const tile = document.createElement("div");
-      tile.classList.add("pm-graph-tile");
-
-      const s = hass.states[sensor];
-      const unit = s.attributes.unit_of_measurement || "";
-      const prettyName = TITLE_MAP[suffixLower] || suffix;
-
-      const title = document.createElement("div");
-      title.classList.add("pm-graph-title");
-      title.textContent = prettyName + (unit ? " - " + unit : "");
-
-      const canvas = document.createElement("canvas");
-      canvas.classList.add("pm-graph");
-      canvas.height = suffixLower === "vitrsmer" ? 300 : 220;
-
-      const legend = document.createElement("div");
-      legend.classList.add("pm-legend");
-
-      tile.appendChild(title);
-      tile.appendChild(canvas);
-      tile.appendChild(legend);
-
-      // rozhodnutí, kam dlaždici umístit
-      const isPrimary = primaryList.length > 0 && primaryList.includes(suffixLower);
-      if (isPrimary) {
-        primaryGraphs.appendChild(tile);
-      } else {
-        secondaryGraphs.appendChild(tile);
-      }
-
-      canvases[sensor] = { canvas, tile, prettyName, legend };
-    }
-
-    await Promise.all(orderedSensors.map(async sensor => {
-      const suffix = sensor.replace("sensor."+prefix+"_","").toLowerCase();
-      if (NON_GRAPH_SENSORS.includes(suffix)) return;
-
-      const url =
-        `/api/history/period/${since}` +
-        `?filter_entity_id=${sensor}` +
-        `&minimal_response` +
-        `&significant_changes_only=false`;
-
-      try {
-        const resp = await fetch(url, {
-          method:"GET",
-          headers:{
-            "Authorization":`Bearer ${token}`,
-            "Content-Type":"application/json",
-            "Accept":"application/json"
-          },
-          credentials:"same-origin"
-        });
-
-        if (resp.ok) history[sensor] = await resp.json();
-      } catch(e) {}
-    }));
-
-    const host = this.shadowRoot.host;
-    const theme = computeTheme(host);
-
-    /* === STANDARDNÍ GRAFY === */
-    for (const sensor of orderedSensors) {
-      const suffix = sensor.replace("sensor."+prefix+"_","").toLowerCase();
-      if (suffix === "vitrsmer") continue;
-      if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
-
-      const points = historyToPoints(history[sensor][0]);
-      if (points.length < 2) continue;
-
-      const { canvas, tile, prettyName, legend } = canvases[sensor];
-      const ctx = canvas.getContext("2d");
-
-      if (this._charts[sensor]) this._charts[sensor].destroy();
-
-      canvas.style.backgroundColor = theme.bgColor;
-      tile.style.backgroundColor = theme.bgColor;
-
-      const { min, max } = computeMinMax(points);
-      const color = COLOR_MAP[suffix] || "#3b82f6";
-
-      this._charts[sensor] = new Chart(ctx, createLineChartConfig(points, prettyName, color, theme.textColor));
-
-      legend.innerHTML = `
-        <div class="pm-legend-item">
-          <span class="pm-legend-color" style="background:red;"></span>
-          <span>Min: ${min.toFixed(1)}</span>
-        </div>
-        <div class="pm-legend-item">
-          <span class="pm-legend-color" style="background:green;"></span>
-          <span>Max: ${max.toFixed(1)}</span>
-        </div>
-      `;
-    }
-
-    /* === WINDROSE === */
-    const windSensor = orderedSensors.find(s => s.endsWith("vitrsmer"));
-
-    if (windSensor && history[windSensor] && history[windSensor][0] && history[windSensor][0].length) {
-      const points = historyToPoints(history[windSensor][0]);
-      if (points.length >= 2) {
-        const { canvas, tile, prettyName, legend } = canvases[windSensor];
-        const ctx = canvas.getContext("2d");
-
-        if (this._charts[windSensor]) this._charts[windSensor].destroy();
-
-        canvas.style.backgroundColor = theme.bgColor;
-        tile.style.backgroundColor = theme.bgColor;
-
-        const bins = buildWindRose(points);
-
-        const avg = Number(entity.attributes.VitrSmer_avg || 0);
-        const mode = Number(entity.attributes.VitrSmer_mode || 0);
-        const vari = Number(entity.attributes.VitrSmer_var || 0);
-
-        const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
-
-        /* === PolarArea jako prázdný kontejner === */
-        this._charts[windSensor] = new Chart(ctx, {
-          type:"polarArea",
-          data:{ labels:[], datasets:[] },
-          options:{
-            responsive:false,
-            maintainAspectRatio:false,
-            layout:{ padding:{ top:20, bottom:20, left:10, right:10 }},
-            scales:{ r:{ ticks:{display:false}, grid:{display:false}, beginAtZero:true }},
-            plugins:{ tooltip:{}, legend:{display:false} }
-          },
-          plugins:[windRosePlugin]
-        });
-
-        legend.innerHTML = `
-          <div class="pm-legend-item">
-            <span class="pm-legend-color" style="background:#ff0000;"></span>
-            <span>Avg: ${avg.toFixed(1)}°</span>
-          </div>
-          <div class="pm-legend-item">
-            <span class="pm-legend-color" style="background:#0000ff;"></span>
-            <span>Mode: ${mode.toFixed(1)}°</span>
-          </div>
-          <div class="pm-legend-item">
-            <span class="pm-legend-color" style="background:rgba(255,165,0,0.8);"></span>
-            <span>Var: ±${vari.toFixed(1)}°</span>
-          </div>
-        `;
-      }
-    }
-  }
-
-  _hexToRgba(hex, alpha) {
-    return hexToRgba(hex, alpha);
-  }
-
-  getCardSize() {
-    return 6;
-  }
-}
-
-customElements.define("pocasimeteo-card", PocasiMeteoCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type:"pocasimeteo-card",
-  name:"PočasíMeteo Card",
-  description:"Automatické grafy pro PočasíMeteo.cz"
-});
