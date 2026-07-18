@@ -650,7 +650,7 @@ class PocasiMeteoCard extends HTMLElement {
     headerTitle.innerHTML = `${d.station_name || ""}`;
     headerTimestamp.innerHTML = `${d.timestamp || ""}`;
 
-    headerMain.innerHTML = `Teplota vnější: ${d.TeplotaVnejsi}°C`;
+    headerMain.innerHTML = `Teplota vnější: ${entity.attributes.temperature}°C`;
 
     headerDetails.innerHTML = `
       <div>Tlak: ${entity.attributes.pressure ?? ""} hPa</div>
