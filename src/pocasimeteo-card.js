@@ -604,15 +604,7 @@ class PocasiMeteoCard extends HTMLElement {
     if (!entity) return;
 
     const nowTs = Date.now();
-    if (nowTs - this._lastFetch 
-      // Zkusíme najít entitu v systému
-      const possibleEntityId = `sensor.pocasimeteo_${s.id}`;
-      if (hass.states[possibleEntityId]) {
-        if (!this.config.hide_sensors.includes(s.id)) {
-          sensorEntities.push(possibleEntityId);
-        }
-      } else {
-        // Fallback pro případ, že se jmenují sensor.<stanice>_<id>
+    if (nowTs - this._lastFetch _<id>
         const fallbackEntityId = `sensor.${(d.station_name || "").toLowerCase().replace(/\s+/g, "_")}_${s.id}`;
         if (hass.states[fallbackEntityId]) {
           if (!this.config.hide_sensors.includes(s.id)) {
@@ -620,7 +612,10 @@ class PocasiMeteoCard extends HTMLElement {
           }
         }
       }
-    }
+    } // Tato závorka nyní správně uzavírá smyčku for
+
+    // Následuje zbytek vaší původní metody (definitivní uložení elementů)...
+    const headerTitle = this.shadowRoot.getElementById("header-title");
 
     const headerTitle = this.shadowRoot.getElementById("header-title");
     const headerTimestamp = this.shadowRoot.getElementById("header-timestamp");
