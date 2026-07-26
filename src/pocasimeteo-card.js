@@ -708,7 +708,7 @@ class PocasiMeteoCard extends HTMLElement {
 
     // vytvoření dlaždic pro grafy – rozdělení na primary/secondary sekci
     for (const sensor of orderedSensors) {
-      const suffix = sensor.replace("sensor."+prefix+"_","");
+      const suffix = sensor.replace("sensor."+entryId+"_","");
       const suffixLower = suffix.toLowerCase();
 
       const tile = document.createElement("div");
@@ -776,7 +776,7 @@ class PocasiMeteoCard extends HTMLElement {
     for (const sensor of orderedSensors) {
       const suffix = sensor.replace("sensor."+entryId+"_","").toLowerCase();
       if (suffix === "vitrsmer") continue;
-      if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
+      if (!history[sensor] || !history[sensor] || !history[sensor].length) continue;
 
       const points = historyToPoints(history[sensor][0]);
       if (points.length < 2) continue;
@@ -809,7 +809,7 @@ class PocasiMeteoCard extends HTMLElement {
     /* === WINDROSE === */
     const windSensor = orderedSensors.find(s => s.endsWith("vitrsmer"));
 
-    if (windSensor && history[windSensor] && history[windSensor][0] && history[windSensor][0].length) {
+    if (windSensor && history[windSensor] && history[windSensor].length) {
       const points = historyToPoints(history[windSensor][0]);
       if (points.length >= 2) {
         const { canvas, tile, prettyName, legend } = canvases[windSensor];
@@ -822,9 +822,9 @@ class PocasiMeteoCard extends HTMLElement {
 
         const bins = buildWindRose(points);
 
-        const avg = Number(entity.attributes.VitrSmer_avg || 0);
-        const mode = Number(entity.attributes.VitrSmer_mode || 0);
-        const vari = Number(entity.attributes.VitrSmer_var || 0);
+        const avg = Number(entity.attributes.vitrsmer_avg || 0);
+        const mode = Number(entity.attributes.vitrsmer_mode || 0);
+        const vari = Number(entity.attributes.vitrsmer_var || 0);
 
         const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
 
