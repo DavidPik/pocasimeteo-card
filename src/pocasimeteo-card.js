@@ -459,7 +459,7 @@ class PocasiMeteoCard extends HTMLElement {
       this._initialized = true;
     }
 
-    if (!entity || !entity.attributes || !("TeplotaVnejsi" in entity.attributes)) {
+    if (!entity || !entity.attributes || !entity.attributes.sensors) {
       const card = this.shadowRoot.querySelector(".pm-card");
       if (card) {
         card.innerHTML = `
@@ -627,13 +627,12 @@ class PocasiMeteoCard extends HTMLElement {
     if (nowTs - this._lastFetch < 30000) return;
     this._lastFetch = nowTs;
 
-    const prefix = (entity.attributes.station_name || "")
-      .toLowerCase().replace(/\s+/g,"_");
+    const entryId = entity.attributes.config_entry_id;
 
     const sensorEntities = Object.keys(hass.states)
-      .filter(e => e.startsWith("sensor."+prefix+"_"))
+      .filter(e => e.startsWith("sensor." + entryId + "_"))
       .filter(e => {
-          const suffix = e.replace("sensor."+prefix+"_","").toLowerCase();
+          const suffix = e.replace("sensor." + entryId + "_","").toLowerCase();
           return VALID_SENSORS.includes(suffix)
               && !this.config.hide_sensors.includes(suffix);
       });
@@ -679,12 +678,9 @@ class PocasiMeteoCard extends HTMLElement {
 
     const since = new Date(Date.now() - 24*3600*1000).toISOString();
 
-    // seznam základních/doplňkových senzorů z integrace (varianta A)
-    const primaryAttr = Array.isArray(d.primary_sensors) ? d.primary_sensors : [];
-    const secondaryAttr = Array.isArray(d.secondary_sensors) ? d.secondary_sensors : [];
-
-    const primaryList = primaryAttr.map(s => String(s).toLowerCase());
-    const secondaryList = secondaryAttr.map(s => String(s).toLowerCase());
+    const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
+    const primaryList = sensorsMeta.filter(s => s.type === "primary").map(s => s.id);
+    const secondaryList = sensorsMeta.filter(s => s.type === "secondary").map(s => s.id);
 
     // fallback: pokud integrace zatím neposkytuje seznamy, použijeme původní pořadí
     let orderedSensors;
@@ -698,7 +694,7 @@ class PocasiMeteoCard extends HTMLElement {
       const secondarySensors = [];
 
       for (const sensor of sensorEntities) {
-        const suffix = sensor.replace("sensor."+prefix+"_","").toLowerCase();
+        const suffix = sensor.replace("sensor."+entryId+"_","").toLowerCase();
         if (primaryList.includes(suffix)) primarySensors.push(sensor);
         else if (secondaryList.includes(suffix)) secondarySensors.push(sensor);
         else secondarySensors.push(sensor);
@@ -749,7 +745,7 @@ class PocasiMeteoCard extends HTMLElement {
     }
 
     await Promise.all(orderedSensors.map(async sensor => {
-      const suffix = sensor.replace("sensor."+prefix+"_","").toLowerCase();
+      const suffix = sensor.replace("sensor."+entryId+"_","").toLowerCase();
       if (NON_GRAPH_SENSORS.includes(suffix)) return;
 
       const url =
@@ -778,7 +774,7 @@ class PocasiMeteoCard extends HTMLElement {
 
     /* === STANDARDNÍ GRAFY === */
     for (const sensor of orderedSensors) {
-      const suffix = sensor.replace("sensor."+prefix+"_","").toLowerCase();
+      const suffix = sensor.replace("sensor."+entryId+"_","").toLowerCase();
       if (suffix === "vitrsmer") continue;
       if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
 
