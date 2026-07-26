@@ -472,7 +472,7 @@ class PocasiMeteoCard extends HTMLElement {
 
     const refresh = entity.attributes.update_interval || 5;
 
-    if (Date.now() - this._lastRender  this._rendering = false);
+    if (Date.now() - this._lastRender < refresh * 60 * 1000) return;
   }
   
   _initialize() {
