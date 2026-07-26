@@ -629,8 +629,6 @@ class PocasiMeteoCard extends HTMLElement {
     }
 
     const headerTitle = this.shadowRoot.getElementById("header-title");
-
-    const headerTitle = this.shadowRoot.getElementById("header-title");
     const headerTimestamp = this.shadowRoot.getElementById("header-timestamp");
     const headerMain = this.shadowRoot.getElementById("header-main");
     const headerDetails = this.shadowRoot.getElementById("header-details");
