@@ -475,12 +475,6 @@ class PocasiMeteoCard extends HTMLElement {
     if (Date.now() - this._lastRender  this._rendering = false);
   }
   
-  // Bezpečné načtení intervalu přímo z atributů entity počasí (odpadá volání callApi)
-    const refresh = entity.attributes.update_interval || 5;
-
-    if (Date.now() - this._lastRender  this._rendering = false);
-  }
-
   _initialize() {
     this.shadowRoot.innerHTML = `
       <style>
