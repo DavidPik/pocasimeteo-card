@@ -459,17 +459,30 @@ class PocasiMeteoCard extends HTMLElement {
       this._initialized = true;
     }
 
-    if (!entity || !entity.attributes || !entity.attributes.sensors) {
+    // DIAGNOSTIKA DO KONZOLE - propadne sem vždy při každé změně stavu v HA
+    if (entity) {
+      console.log("PM-DEBUG: Načtená entita:", this.config.entity);
+      console.log("PM-DEBUG: Atributy, které karta vidí:", entity.attributes);
+    } else {
+      console.log("PM-DEBUG: POZOR! Entita v systému vůbec neexistuje:", this.config.entity);
+    }
+
+    // Bezpečnostní pojistka: pokud integrace ještě nemá pole 'sensors', zkusíme ho vytvořit provizorně za běhu
+    if (!entity || !entity.attributes) {
       const card = this.shadowRoot.querySelector(".pm-card");
       if (card) {
         card.innerHTML = `
           <h2>PočasíMeteo</h2>
-          <p style="opacity:0.7;">Backendová komponenta není dostupná.</p>
+          <p style="opacity:0.7;">Backendová komponenta není dostupná (chybí stav entity).</p>
         `;
       }
       return;
     }
 
+    if (!entity.attributes.sensors) {
+      // Pokud integrace zatím neposílá sensors, vyrobíme pro kartu provizorní prázdné pole, aby nespadla
+      entity.attributes.sensors = [];
+    }
     if (!this._updateInterval) {
       const entryId = entity.attributes.config_entry_id;
       if (entryId) {
