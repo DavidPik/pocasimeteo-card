@@ -640,12 +640,13 @@ class PocasiMeteoCard extends HTMLElement {
     if (nowTs - this._lastFetch < 30000) return;
     this._lastFetch = nowTs;
 
-    const entryId = entity.attributes.config_entry_id;
+    // Získáme název stanice (gar632) malými písmeny a odstraníme mezery
+    const stationPrefix = (entity.attributes.station_name || "gar632").toLowerCase().replace(/\s+/g, "_");
 
     const sensorEntities = Object.keys(hass.states)
-      .filter(e => e.startsWith("sensor." + entryId + "_"))
+      .filter(e => e.startsWith("sensor." + stationPrefix + "_"))
       .filter(e => {
-          const suffix = e.replace("sensor." + entryId + "_","").toLowerCase();
+          const suffix = e.replace("sensor." + stationPrefix + "_", "").toLowerCase();
           return VALID_SENSORS.includes(suffix)
               && !this.config.hide_sensors.includes(suffix);
       });
@@ -707,7 +708,7 @@ class PocasiMeteoCard extends HTMLElement {
       const secondarySensors = [];
 
       for (const sensor of sensorEntities) {
-        const suffix = sensor.replace("sensor."+entryId+"_","").toLowerCase();
+        const suffix = sensor.replace("sensor."+stationPrefix+"_","").toLowerCase();
         if (primaryList.includes(suffix)) primarySensors.push(sensor);
         else if (secondaryList.includes(suffix)) secondarySensors.push(sensor);
         else secondarySensors.push(sensor);
@@ -721,7 +722,7 @@ class PocasiMeteoCard extends HTMLElement {
 
     // vytvoření dlaždic pro grafy – rozdělení na primary/secondary sekci
     for (const sensor of orderedSensors) {
-      const suffix = sensor.replace("sensor."+entryId+"_","");
+      const suffix = sensor.replace("sensor." + stationPrefix + "_", "");
       const suffixLower = suffix.toLowerCase();
 
       const tile = document.createElement("div");
@@ -758,7 +759,7 @@ class PocasiMeteoCard extends HTMLElement {
     }
 
     await Promise.all(orderedSensors.map(async sensor => {
-      const suffix = sensor.replace("sensor."+entryId+"_","").toLowerCase();
+      const suffix = sensor.replace("sensor." + stationPrefix + "_", "").toLowerCase();
       if (NON_GRAPH_SENSORS.includes(suffix)) return;
 
       const url =
@@ -787,7 +788,7 @@ class PocasiMeteoCard extends HTMLElement {
 
     /* === STANDARDNÍ GRAFY === */
     for (const sensor of orderedSensors) {
-      const suffix = sensor.replace("sensor."+entryId+"_","").toLowerCase();
+      const suffix = sensor.replace("sensor." + stationPrefix + "_", "").toLowerCase();
       if (suffix === "vitrsmer") continue;
       if (!history[sensor] || !history[sensor] || !history[sensor].length) continue;
 
