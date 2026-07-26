@@ -470,7 +470,12 @@ class PocasiMeteoCard extends HTMLElement {
       return;
     }
 
-    // Bezpečné načtení intervalu přímo z atributů entity počasí (odpadá volání callApi)
+    const refresh = entity.attributes.update_interval || 5;
+
+    if (Date.now() - this._lastRender  this._rendering = false);
+  }
+  
+  // Bezpečné načtení intervalu přímo z atributů entity počasí (odpadá volání callApi)
     const refresh = entity.attributes.update_interval || 5;
 
     if (Date.now() - this._lastRender  this._rendering = false);
