@@ -472,7 +472,17 @@ class PocasiMeteoCard extends HTMLElement {
 
     const refresh = entity.attributes.update_interval || 5;
 
-    if (Date.now() - this._lastRender < refresh * 60 * 1000) return;
+    if (refresh * 60 * 1000 > Date.now() - this._lastRender) return;
+
+    if (this._lastAttributes && JSON.stringify(this._lastAttributes) === JSON.stringify(entity.attributes)) return;
+
+    this._lastAttributes = JSON.parse(JSON.stringify(entity.attributes));
+    this._lastRender = Date.now();
+
+    if (this._rendering) return;
+    this._rendering = true;
+
+    this._update(hass).finally(() => { this._rendering = false; });
   }
   
   _initialize() {
@@ -610,6 +620,8 @@ class PocasiMeteoCard extends HTMLElement {
     const d = entity.attributes;
     const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
 
+    const stationPrefix = d.station_name.toLowerCase().replace(/\s+/g, "_"); 
+
     const sensorEntities = [];
 
     for (const s of sensorsMeta) {
@@ -619,7 +631,7 @@ class PocasiMeteoCard extends HTMLElement {
           sensorEntities.push(possibleEntityId);
         }
       } else {
-        const fallbackEntityId = `sensor.${(d.station_name || "").toLowerCase().replace(/\s+/g, "_")}_${s.id}`;
+        const fallbackEntityId = `sensor.${stationPrefix}_${s.id}`;
         if (hass.states[fallbackEntityId]) {
           if (!this.config.hide_sensors.includes(s.id)) {
             sensorEntities.push(fallbackEntityId);
