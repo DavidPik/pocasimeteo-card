@@ -651,6 +651,10 @@ class PocasiMeteoCard extends HTMLElement {
               && !this.config.hide_sensors.includes(suffix);
       });
 
+    console.log("PM-DLAZDICE: Hledaný prefix je:", "sensor." + stationPrefix + "_");
+    console.log("PM-DLAZDICE: Seznam VŠECH entit v HA:", Object.keys(hass.states).filter(e => e.startsWith("sensor.")));
+
+    
     const headerTitle = this.shadowRoot.getElementById("header-title");
     const headerTimestamp = this.shadowRoot.getElementById("header-timestamp");
     const headerMain = this.shadowRoot.getElementById("header-main");
