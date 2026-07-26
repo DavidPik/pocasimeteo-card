@@ -459,53 +459,21 @@ class PocasiMeteoCard extends HTMLElement {
       this._initialized = true;
     }
 
-    // DIAGNOSTIKA DO KONZOLE - propadne sem vždy při každé změně stavu v HA
-    if (entity) {
-      console.log("PM-DEBUG: Načtená entita:", this.config.entity);
-      console.log("PM-DEBUG: Atributy, které karta vidí:", entity.attributes);
-    } else {
-      console.log("PM-DEBUG: POZOR! Entita v systému vůbec neexistuje:", this.config.entity);
-    }
-
-    // Bezpečnostní pojistka: pokud integrace ještě nemá pole 'sensors', zkusíme ho vytvořit provizorně za běhu
-    if (!entity || !entity.attributes) {
+    if (!entity || !entity.attributes || !entity.attributes.sensors) {
       const card = this.shadowRoot.querySelector(".pm-card");
       if (card) {
         card.innerHTML = `
           <h2>PočasíMeteo</h2>
-          <p style="opacity:0.7;">Backendová komponenta není dostupná (chybí stav entity).</p>
+          <p style="opacity:0.7;">Backendová komponenta není dostupná (chybí data senzorů).</p>
         `;
       }
       return;
     }
 
-    if (!entity.attributes.sensors) {
-      // Pokud integrace zatím neposílá sensors, vyrobíme pro kartu provizorní prázdné pole, aby nespadla
-      entity.attributes.sensors = [];
-    }
-    if (!this._updateInterval) {
-      const entryId = entity.attributes.config_entry_id;
-      if (entryId) {
-        hass.callApi("GET", `config/config_entries/entry/${entryId}`)
-          .then(entry => this._updateInterval = entry.data.update_interval || 60)
-          .catch(() => this._updateInterval = 60);
-      } else this._updateInterval = 60;
-    }
+    // Bezpečné načtení intervalu přímo z atributů entity počasí (odpadá volání callApi)
+    const refresh = entity.attributes.update_interval || 5;
 
-    const refresh = this._updateInterval || 60;
-
-    if (Date.now() - this._lastRender < refresh*1000) return;
-
-    if (this._lastAttributes &&
-        JSON.stringify(this._lastAttributes) === JSON.stringify(entity.attributes)) return;
-
-    this._lastAttributes = JSON.parse(JSON.stringify(entity.attributes));
-    this._lastRender = Date.now();
-
-    if (this._rendering) return;
-    this._rendering = true;
-
-    this._update(hass).finally(() => this._rendering = false);
+    if (Date.now() - this._lastRender  this._rendering = false);
   }
 
   _initialize() {
@@ -637,24 +605,24 @@ class PocasiMeteoCard extends HTMLElement {
     if (!entity) return;
 
     const nowTs = Date.now();
-    if (nowTs - this._lastFetch < 30000) return;
-    this._lastFetch = nowTs;
+    if (nowTs - this._lastFetch 
+      // Zkusíme najít entitu v systému
+      const possibleEntityId = `sensor.pocasimeteo_${s.id}`;
+      if (hass.states[possibleEntityId]) {
+        if (!this.config.hide_sensors.includes(s.id)) {
+          sensorEntities.push(possibleEntityId);
+        }
+      } else {
+        // Fallback pro případ, že se jmenují sensor.<stanice>_<id>
+        const fallbackEntityId = `sensor.${(d.station_name || "").toLowerCase().replace(/\s+/g, "_")}_${s.id}`;
+        if (hass.states[fallbackEntityId]) {
+          if (!this.config.hide_sensors.includes(s.id)) {
+            sensorEntities.push(fallbackEntityId);
+          }
+        }
+      }
+    }
 
-    // Získáme název stanice (gar632) malými písmeny a odstraníme mezery
-    const stationPrefix = (entity.attributes.station_name || "gar632").toLowerCase().replace(/\s+/g, "_");
-
-    const sensorEntities = Object.keys(hass.states)
-      .filter(e => e.startsWith("sensor." + stationPrefix + "_"))
-      .filter(e => {
-          const suffix = e.replace("sensor." + stationPrefix + "_", "").toLowerCase();
-          return VALID_SENSORS.includes(suffix)
-              && !this.config.hide_sensors.includes(suffix);
-      });
-
-    console.log("PM-DLAZDICE: Hledaný prefix je:", "sensor." + stationPrefix + "_");
-    console.log("PM-DLAZDICE: Seznam VŠECH entit v HA:", Object.keys(hass.states).filter(e => e.startsWith("sensor.")));
-
-    
     const headerTitle = this.shadowRoot.getElementById("header-title");
     const headerTimestamp = this.shadowRoot.getElementById("header-timestamp");
     const headerMain = this.shadowRoot.getElementById("header-main");
@@ -662,28 +630,22 @@ class PocasiMeteoCard extends HTMLElement {
     const primaryGraphs = this.shadowRoot.getElementById("primary-graphs");
     const secondaryGraphs = this.shadowRoot.getElementById("secondary-graphs");
 
-    const d = entity.attributes;
-
-    headerTitle.innerHTML = `${d.station_name || ""}`;
+    headerTitle.innerHTML = `${d.lokalita_stanice || d.station_name || ""}`;
     headerTimestamp.innerHTML = `${d.timestamp || ""}`;
-
     headerMain.innerHTML = `Teplota vnější: ${entity.attributes.temperature}°C`;
 
     headerDetails.innerHTML = `
       <div>Tlak: ${entity.attributes.pressure ?? ""} hPa</div>
       <div>Vlhkost: ${entity.attributes.humidity ?? ""}%</div>
-      <div>Vítr: ${entity.attributes.wind_speed ?? ""} km/h (${degToDirection(Number(entity.attributes.wind_bearing))})</div>
-      <div>Nárazy: ${entity.attributes.wind_gust_speed ?? ""} km/h</div>
-      <div>Srážky dnes: ${entity.attributes.precipitation ?? 0} mm</div>
+      <div>Vítr: ${entity.attributes.wind_speed ?? ""} m/s (${degToDirection(Number(entity.attributes.wind_bearing))})</div>
+      <div>Nárazy: ${entity.attributes.wind_gust_speed ?? ""} m/s</div>
+      <div>Srážky dnes: ${entity.attributes.srazky_den ?? 0} mm</div>
     `;
 
     primaryGraphs.innerHTML = "";
     secondaryGraphs.innerHTML = "";
 
-    if (this.config.show_graphs === false) {
-      return;   // grafy se nevykreslí
-    }
-
+    if (this.config.show_graphs === false) return;
     if (sensorEntities.length === 0) return;
 
     const token =
@@ -696,45 +658,32 @@ class PocasiMeteoCard extends HTMLElement {
 
     const since = new Date(Date.now() - 24*3600*1000).toISOString();
 
-    const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
     const primaryList = sensorsMeta.filter(s => s.type === "primary").map(s => s.id);
     const secondaryList = sensorsMeta.filter(s => s.type === "secondary").map(s => s.id);
 
-    // fallback: pokud integrace zatím neposkytuje seznamy, použijeme původní pořadí
-    let orderedSensors;
-    if (primaryList.length === 0 && secondaryList.length === 0) {
-      orderedSensors = [
-        ...sensorEntities.filter(s => s.endsWith("vitrsmer")),
-        ...sensorEntities.filter(s => !s.endsWith("vitrsmer"))
-      ];
-    } else {
-      const primarySensors = [];
-      const secondarySensors = [];
+    const orderedSensors = [];
+    const primarySensors = [];
+    const secondarySensors = [];
 
-      for (const sensor of sensorEntities) {
-        const suffix = sensor.replace("sensor."+stationPrefix+"_","").toLowerCase();
-        if (primaryList.includes(suffix)) primarySensors.push(sensor);
-        else if (secondaryList.includes(suffix)) secondarySensors.push(sensor);
-        else secondarySensors.push(sensor);
-      }
-
-      orderedSensors = [...primarySensors, ...secondarySensors];
+    for (const sensor of sensorEntities) {
+      // Dynamické odříznutí prefixu, ať je jakýkoliv (pocasimeteo_ nebo gar632_)
+      const suffix = sensor.split("_").pop().toLowerCase();
+      if (primaryList.includes(suffix)) primarySensors.push(sensor);
+      else secondarySensors.push(sensor);
     }
+    orderedSensors.push(...primarySensors, ...secondarySensors);
 
     const canvases = {};
     const history = {};
 
-    // vytvoření dlaždic pro grafy – rozdělení na primary/secondary sekci
     for (const sensor of orderedSensors) {
-      const suffix = sensor.replace("sensor." + stationPrefix + "_", "");
-      const suffixLower = suffix.toLowerCase();
-
+      const suffix = sensor.split("_").pop().toLowerCase();
       const tile = document.createElement("div");
       tile.classList.add("pm-graph-tile");
 
       const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
-      const prettyName = TITLE_MAP[suffixLower] || suffix;
+      const prettyName = TITLE_MAP[suffix] || suffix;
 
       const title = document.createElement("div");
       title.classList.add("pm-graph-title");
@@ -742,7 +691,7 @@ class PocasiMeteoCard extends HTMLElement {
 
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
-      canvas.height = suffixLower === "vitrsmer" ? 300 : 220;
+      canvas.height = suffix === "vitrsmer" ? 300 : 220;
 
       const legend = document.createElement("div");
       legend.classList.add("pm-legend");
@@ -751,9 +700,7 @@ class PocasiMeteoCard extends HTMLElement {
       tile.appendChild(canvas);
       tile.appendChild(legend);
 
-      // rozhodnutí, kam dlaždici umístit
-      const isPrimary = primaryList.length > 0 && primaryList.includes(suffixLower);
-      if (isPrimary) {
+      if (primaryList.includes(suffix)) {
         primaryGraphs.appendChild(tile);
       } else {
         secondaryGraphs.appendChild(tile);
