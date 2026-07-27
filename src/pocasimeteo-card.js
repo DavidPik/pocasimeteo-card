@@ -31,43 +31,63 @@ Chart.register(
   RadialLinearScale
 );
 
-/* === VALID_SENSORS === */
+/* === VALID_SENSORS – VYČIŠTĚNÁ STRUKTURA === */
 const VALID_SENSORS = [
-  "teplotavnejsi",
-  "vlhkostvnejsi",
-  "tlakrel","vitr",
-  "vitrnarazy",
-  "rainintensity",
-  "slunzareni",
-  "uvindex",
-  "teplotavnitrni",
-  "vlhkostvnitrni",
+  "teplota_venkovni",
+  "vlhkost_venkovni",
+  "tlak_relativni",
+  "intenzita_srazek",
+  "vitr_rychlost",
+  "vitr_narazy",
+  "vitr_smer",
+  "slunecni_zareni",
+  "uv_index",
+  "teplota_vnitrni",
+  "vlhkost_vnitrni",
   "co2",
   "pm1",
   "pm2",
-  "pm1v",
-  "vitrsmer"
+  "pm1v"
 ];
 
-const NON_GRAPH_SENSORS = ["srazkyden"];
+const NON_GRAPH_SENSORS = ["srazky_den"];
 
-/* === NÁZVY === */
+/* === ČESKÉ NÁZVY GRAFŮ === */
 const TITLE_MAP = {
-  teplotavnejsi: "Teplota vnější",
-  teplotavnitrni: "Teplota vnitřní",
-  vlhkostvnejsi: "Vlhkost vnější",
-  vlhkostvnitrni: "Vlhkost vnitřní",
-  tlakrel: "Tlak relativní",
-  vitr: "Vítr",
-  vitrnarazy: "Nárazy větru",
-  vitrsmer: "Směr větru",
-  rainintensity: "Intenzita srážek",
-  slunzareni: "Sluneční záření",
-  uvindex: "UV index",
+  teplota_venkovni: "Teplota venkovní",
+  teplota_vnitrni: "Teplota vnitřní",
+  vlhkost_venkovni: "Vlhkost venkovní",
+  vlhkost_vnitrni: "Vlhkost vnitřní",
+  tlak_relativni: "Tlak relativní",
+  vitr_rychlost: "Vítr rychlost",
+  vitr_narazy: "Nárazy větru",
+  vitr_smer: "Směr větru",
+  intenzita_srazek: "Intenzita srážek",
+  slunecni_zareni: "Sluneční záření",
+  uv_index: "UV index",
   co2: "CO₂",
   pm1: "PM1",
   pm2: "PM2",
   pm1v: "PM1 varianta"
+};
+
+/* === ČISTÉ MAPOVÁNÍ BAREV === */
+const COLOR_MAP = {
+  teplota_venkovni: "#ff6b3d",
+  teplota_vnitrni: "#ffa86b",
+  vlhkost_venkovni: "#1e88e5",
+  vlhkost_vnitrni: "#64b5f6",
+  tlak_relativni: "#8e24aa",
+  vitr_rychlost: "#43a047",
+  vitr_narazy: "#2e7d32",
+  vitr_smer: "#009688",
+  intenzita_srazek: "#0288d1",
+  slunecni_zareni: "#ffb300",
+  uv_index: "#fdd835",
+  co2: "#6d4c41",
+  pm1: "#7e57c2",
+  pm2: "#5e35b1",
+  pm1v: "#9575cd"
 };
 
 /* === BARVY === */
@@ -614,28 +634,19 @@ class PocasiMeteoCard extends HTMLElement {
     if (!entity) return;
 
     const nowTs = Date.now();
-    if (nowTs - this._lastFetch < 30000) return;
+    // Obrácený zápis podmínky, který chat už nikdy nezkreslí:
+    if (30000 > nowTs - this._lastFetch) return;
     this._lastFetch = nowTs;
 
     const d = entity.attributes;
     const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
 
-    const stationPrefix = d.station_name.toLowerCase().replace(/\s+/g, "_"); 
-
+    // NEPRŮSTŘELNÁ LOGIKA: Karta nic nehádá, entity_id si vezme přímo z integrace!
     const sensorEntities = [];
-
     for (const s of sensorsMeta) {
-      const possibleEntityId = `sensor.pocasimeteo_${s.id}`;
-      if (hass.states[possibleEntityId]) {
+      if (hass.states[s.entity_id]) {
         if (!this.config.hide_sensors.includes(s.id)) {
-          sensorEntities.push(possibleEntityId);
-        }
-      } else {
-        const fallbackEntityId = `sensor.${stationPrefix}_${s.id}`;
-        if (hass.states[fallbackEntityId]) {
-          if (!this.config.hide_sensors.includes(s.id)) {
-            sensorEntities.push(fallbackEntityId);
-          }
+          sensorEntities.push(s.entity_id);
         }
       }
     }
@@ -649,14 +660,14 @@ class PocasiMeteoCard extends HTMLElement {
 
     headerTitle.innerHTML = `${d.lokalita_stanice || d.station_name || ""}`;
     headerTimestamp.innerHTML = `${d.timestamp || ""}`;
-    headerMain.innerHTML = `Teplota vnější: ${entity.attributes.temperature}°C`;
+    headerMain.innerHTML = `Teplota vnější: ${d.teplota_venkovni_value ?? entity.attributes.temperature}°C`;
 
     headerDetails.innerHTML = `
       <div>Tlak: ${entity.attributes.pressure ?? ""} hPa</div>
       <div>Vlhkost: ${entity.attributes.humidity ?? ""}%</div>
       <div>Vítr: ${entity.attributes.wind_speed ?? ""} m/s (${degToDirection(Number(entity.attributes.wind_bearing))})</div>
       <div>Nárazy: ${entity.attributes.wind_gust_speed ?? ""} m/s</div>
-      <div>Srážky dnes: ${entity.attributes.srazky_den ?? 0} mm</div>
+      <div>Srážky dnes: ${d.srazky_den ?? 0} mm</div>
     `;
 
     primaryGraphs.innerHTML = "";
@@ -683,8 +694,9 @@ class PocasiMeteoCard extends HTMLElement {
     const secondarySensors = [];
 
     for (const sensor of sensorEntities) {
-      // Dynamické odříznutí prefixu, ať je jakýkoliv (pocasimeteo_ nebo gar632_)
-      const suffix = sensor.split("_").pop().toLowerCase();
+      const meta = sensorsMeta.find(m => m.entity_id === sensor);
+      const suffix = meta ? meta.id : "";
+      
       if (primaryList.includes(suffix)) primarySensors.push(sensor);
       else secondarySensors.push(sensor);
     }
@@ -694,7 +706,9 @@ class PocasiMeteoCard extends HTMLElement {
     const history = {};
 
     for (const sensor of orderedSensors) {
-      const suffix = sensor.split("_").pop().toLowerCase();
+      const meta = sensorsMeta.find(m => m.entity_id === sensor);
+      const suffix = meta ? meta.id : "";
+      
       const tile = document.createElement("div");
       tile.classList.add("pm-graph-tile");
 
@@ -708,7 +722,7 @@ class PocasiMeteoCard extends HTMLElement {
 
       const canvas = document.createElement("canvas");
       canvas.classList.add("pm-graph");
-      canvas.height = suffix === "vitrsmer" ? 300 : 220;
+      canvas.height = suffix === "vitr_smer" ? 300 : 220;
 
       const legend = document.createElement("div");
       legend.classList.add("pm-legend");
@@ -757,7 +771,7 @@ class PocasiMeteoCard extends HTMLElement {
     /* === STANDARDNÍ GRAFY === */
     for (const sensor of orderedSensors) {
       const suffix = sensor.replace("sensor." + stationPrefix + "_", "").toLowerCase();
-      if (suffix === "vitrsmer") continue;
+      if (suffix === "vitr_smer") continue;
       if (!history[sensor] || !history[sensor] || !history[sensor].length) continue;
 
       const points = historyToPoints(history[sensor][0]);
@@ -789,7 +803,7 @@ class PocasiMeteoCard extends HTMLElement {
     }
 
     /* === WINDROSE === */
-    const windSensor = orderedSensors.find(s => s.endsWith("vitrsmer"));
+    const windSensor = orderedSensors.find(s => s.endsWith("vitr_smer"));
 
     if (windSensor && history[windSensor] && history[windSensor].length) {
       const points = historyToPoints(history[windSensor][0]);
@@ -804,9 +818,9 @@ class PocasiMeteoCard extends HTMLElement {
 
         const bins = buildWindRose(points);
 
-        const avg = Number(entity.attributes.vitrsmer_avg || 0);
-        const mode = Number(entity.attributes.vitrsmer_mode || 0);
-        const vari = Number(entity.attributes.vitrsmer_var || 0);
+        const avg = Number(entity.attributes.vitr_smer_avg || 0);
+        const mode = Number(entity.attributes.vitr_smer_mode || 0);
+        const vari = Number(entity.attributes.vitr_smer_var || 0);
 
         const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
 
