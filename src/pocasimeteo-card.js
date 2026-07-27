@@ -31,65 +31,6 @@ Chart.register(
   RadialLinearScale
 );
 
-/* === VALID_SENSORS – VYČIŠTĚNÁ STRUKTURA === */
-const VALID_SENSORS = [
-  "teplota_venkovni",
-  "vlhkost_venkovni",
-  "tlak_relativni",
-  "intenzita_srazek",
-  "vitr_rychlost",
-  "vitr_narazy",
-  "vitr_smer",
-  "slunecni_zareni",
-  "uv_index",
-  "teplota_vnitrni",
-  "vlhkost_vnitrni",
-  "co2",
-  "pm1",
-  "pm2",
-  "pm1v"
-];
-
-const NON_GRAPH_SENSORS = ["srazky_den"];
-
-/* === ČESKÉ NÁZVY GRAFŮ === */
-const TITLE_MAP = {
-  teplota_venkovni: "Teplota venkovní",
-  teplota_vnitrni: "Teplota vnitřní",
-  vlhkost_venkovni: "Vlhkost venkovní",
-  vlhkost_vnitrni: "Vlhkost vnitřní",
-  tlak_relativni: "Tlak relativní",
-  vitr_rychlost: "Vítr rychlost",
-  vitr_narazy: "Nárazy větru",
-  vitr_smer: "Směr větru",
-  intenzita_srazek: "Intenzita srážek",
-  slunecni_zareni: "Sluneční záření",
-  uv_index: "UV index",
-  co2: "CO₂",
-  pm1: "PM1",
-  pm2: "PM2",
-  pm1v: "PM1 varianta"
-};
-
-/* === ČISTÉ MAPOVÁNÍ BAREV === */
-const COLOR_MAP = {
-  teplota_venkovni: "#ff6b3d",
-  teplota_vnitrni: "#ffa86b",
-  vlhkost_venkovni: "#1e88e5",
-  vlhkost_vnitrni: "#64b5f6",
-  tlak_relativni: "#8e24aa",
-  vitr_rychlost: "#43a047",
-  vitr_narazy: "#2e7d32",
-  vitr_smer: "#009688",
-  intenzita_srazek: "#0288d1",
-  slunecni_zareni: "#ffb300",
-  uv_index: "#fdd835",
-  co2: "#6d4c41",
-  pm1: "#7e57c2",
-  pm2: "#5e35b1",
-  pm1v: "#9575cd"
-};
-
 const GRID_COLOR = "rgba(255,255,255,0.2)";
 
 const WIND_DIR_LABELS = [
@@ -606,22 +547,17 @@ class PocasiMeteoCard extends HTMLElement {
     if (!entity) return;
 
     const nowTs = Date.now();
-    // Obrácený zápis podmínky, který chat už nikdy nezkreslí:
     if (30000 > nowTs - this._lastFetch) return;
     this._lastFetch = nowTs;
 
     const d = entity.attributes;
-    const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
-
-    // NEPRŮSTŘELNÁ LOGIKA: Karta nic nehádá, entity_id si vezme přímo z integrace!
-    const sensorEntities = [];
-    for (const s of sensorsMeta) {
-      if (hass.states[s.entity_id]) {
-        if (!this.config.hide_sensors.includes(s.id)) {
-          sensorEntities.push(s.entity_id);
-        }
-      }
-    }
+    
+    // ČTENÍ BODŮ C, D: Karta si vezme rovnou hotové seznamy skutečných entit z weather
+    const primarySensors = Array.isArray(d.primary_sensors) ? d.primary_sensors : [];
+    const secondarySensors = Array.isArray(d.secondary_sensors) ? d.secondary_sensors : [];
+    
+    // Spojíme je do jednoho pole pro stažení historie
+    const orderedSensors = [...primarySensors, ...secondarySensors];
 
     const headerTitle = this.shadowRoot.getElementById("header-title");
     const headerTimestamp = this.shadowRoot.getElementById("header-timestamp");
@@ -632,7 +568,7 @@ class PocasiMeteoCard extends HTMLElement {
 
     headerTitle.innerHTML = `${d.lokalita_stanice || d.station_name || ""}`;
     headerTimestamp.innerHTML = `${d.timestamp || ""}`;
-    headerMain.innerHTML = `Teplota vnější: ${d.teplota_venkovni_value ?? entity.attributes.temperature}°C`;
+    headerMain.innerHTML = `Teplota venkovní: ${d.teplota_vnejsi_value ?? entity.attributes.temperature}°C`;
 
     headerDetails.innerHTML = `
       <div>Tlak: ${entity.attributes.pressure ?? ""} hPa</div>
@@ -646,7 +582,7 @@ class PocasiMeteoCard extends HTMLElement {
     secondaryGraphs.innerHTML = "";
 
     if (this.config.show_graphs === false) return;
-    if (sensorEntities.length === 0) return;
+    if (orderedSensors.length === 0) return;
 
     const token =
       hass.connection?.options?.accessToken ||
@@ -658,35 +594,24 @@ class PocasiMeteoCard extends HTMLElement {
 
     const since = new Date(Date.now() - 24*3600*1000).toISOString();
 
-    const primaryList = sensorsMeta.filter(s => s.type === "primary").map(s => s.id);
-    const secondaryList = sensorsMeta.filter(s => s.type === "secondary").map(s => s.id);
-
-    const orderedSensors = [];
-    const primarySensors = [];
-    const secondarySensors = [];
-
-    for (const sensor of sensorEntities) {
-      const meta = sensorsMeta.find(m => m.entity_id === sensor);
-      const suffix = meta ? meta.id : "";
-      
-      if (primaryList.includes(suffix)) primarySensors.push(sensor);
-      else secondarySensors.push(sensor);
-    }
-    orderedSensors.push(...primarySensors, ...secondarySensors);
-
     const canvases = {};
     const history = {};
 
+    // Smyčka pro dynamické generování dlaždic grafů
     for (const sensor of orderedSensors) {
-      const meta = sensorsMeta.find(m => m.entity_id === sensor);
-      const suffix = meta ? meta.id : "";
-      
+      const s = hass.states[sensor];
+      if (!s) continue;
+
+      // Zjistíme čisté vnitřní ID odříznutím konce entity (např. teplota_vnejsi)
+      const suffix = sensor.split(".").pop().replace(/^[a-zA-Z0-9]+_/, "");
+
       const tile = document.createElement("div");
       tile.classList.add("pm-graph-tile");
 
-      const s = hass.states[sensor];
       const unit = s.attributes.unit_of_measurement || "";
-      const prettyName = TITLE_MAP[suffix] || suffix;
+      
+      // ČTENÍ BODU E: Název si karta přečte přímo ze systému Home Assistant!
+      const prettyName = s.attributes.friendly_name || suffix;
 
       const title = document.createElement("div");
       title.classList.add("pm-graph-title");
@@ -703,18 +628,19 @@ class PocasiMeteoCard extends HTMLElement {
       tile.appendChild(canvas);
       tile.appendChild(legend);
 
-      if (primaryList.includes(suffix)) {
+      // Rozřadíme dlaždici podle toho, v jakém poli z weather přišla
+      if (primarySensors.includes(sensor)) {
         primaryGraphs.appendChild(tile);
       } else {
         secondaryGraphs.appendChild(tile);
       }
 
-      canvases[sensor] = { canvas, tile, prettyName, legend };
+      canvases[sensor] = { canvas, tile, prettyName, legend, suffix };
     }
 
+    // --- Načtení historie z HA API ---
     await Promise.all(orderedSensors.map(async sensor => {
-      const suffix = sensor.replace("sensor." + stationPrefix + "_", "").toLowerCase();
-      if (NON_GRAPH_SENSORS.includes(suffix)) return;
+      if (NON_GRAPH_SENSORS.some(n => sensor.endsWith(n))) return;
 
       const url =
         `/api/history/period/${since}` +
@@ -740,16 +666,16 @@ class PocasiMeteoCard extends HTMLElement {
     const host = this.shadowRoot.host;
     const theme = computeTheme(host);
 
-    /* === STANDARDNÍ GRAFY === */
+    /* === VYVKRESLENÍ STANDARDNÍCH GRAFŮ === */
     for (const sensor of orderedSensors) {
-      const suffix = sensor.replace("sensor." + stationPrefix + "_", "").toLowerCase();
-      if (suffix === "vitr_smer") continue;
-      if (!history[sensor] || !history[sensor] || !history[sensor].length) continue;
+      const item = canvases[sensor];
+      if (!item || item.suffix === "vitr_smer") continue;
+      if (!history[sensor] || !history[sensor].length) continue;
 
-      const points = historyToPoints(history[sensor][0]);
+      const points = historyToPoints(history[sensor]);
       if (points.length < 2) continue;
 
-      const { canvas, tile, prettyName, legend } = canvases[sensor];
+      const { canvas, tile, prettyName, legend, suffix } = item;
       const ctx = canvas.getContext("2d");
 
       if (this._charts[sensor]) this._charts[sensor].destroy();
@@ -758,7 +684,10 @@ class PocasiMeteoCard extends HTMLElement {
       tile.style.backgroundColor = theme.bgColor;
 
       const { min, max } = computeMinMax(points);
-      const color = COLOR_MAP[suffix] || "#3b82f6";
+      
+      // ČTENÍ BODU F: Barvu si karta vytáhne přímo z atributu senzoru!
+      const sState = hass.states[sensor];
+      const color = sState ? (sState.attributes.graph_color || "#3b82f6") : "#3b82f6";
 
       this._charts[sensor] = new Chart(ctx, createLineChartConfig(points, prettyName, color, theme.textColor));
 
@@ -774,13 +703,14 @@ class PocasiMeteoCard extends HTMLElement {
       `;
     }
 
-    /* === WINDROSE === */
+    /* === VYVKRESLENÍ VĚTRNÉ RŮŽICE === */
     const windSensor = orderedSensors.find(s => s.endsWith("vitr_smer"));
 
     if (windSensor && history[windSensor] && history[windSensor].length) {
-      const points = historyToPoints(history[windSensor][0]);
+      const points = historyToPoints(history[windSensor]);
       if (points.length >= 2) {
-        const { canvas, tile, prettyName, legend } = canvases[windSensor];
+        const item = canvases[windSensor];
+        const { canvas, tile, prettyName, legend } = item;
         const ctx = canvas.getContext("2d");
 
         if (this._charts[windSensor]) this._charts[windSensor].destroy();
@@ -790,13 +720,12 @@ class PocasiMeteoCard extends HTMLElement {
 
         const bins = buildWindRose(points);
 
-        const avg = Number(entity.attributes.vitr_smer_avg || 0);
-        const mode = Number(entity.attributes.vitr_smer_mode || 0);
-        const vari = Number(entity.attributes.vitr_smer_var || 0);
+        const avg = Number(d.vitr_smer_value || 0);
+        const mode = Number(d.vitr_smer_value || 0);
+        const vari = 0.0;
 
         const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
 
-        /* === PolarArea jako prázdný kontejner === */
         this._charts[windSensor] = new Chart(ctx, {
           type:"polarArea",
           data:{ labels:[], datasets:[] },
@@ -820,7 +749,7 @@ class PocasiMeteoCard extends HTMLElement {
             <span>Mode: ${mode.toFixed(1)}°</span>
           </div>
           <div class="pm-legend-item">
-            <span class="pm-legend-color" style="background:rgba(255,165,0,0.8);"></span>
+            <span class="pm-legend-color" style="background:rgba(255,165,0,0.8); row-gap:0;"></span>
             <span>Var: ±${vari.toFixed(1)}°</span>
           </div>
         `;
