@@ -666,7 +666,7 @@ class PocasiMeteoCard extends HTMLElement {
     const host = this.shadowRoot.host;
     const theme = computeTheme(host);
 
-    /* === VYVKRESLENÍ STANDARDNÍCH GRAFŮ === */
+    /* === VYKRESLENÍ STANDARDNÍCH GRAFŮ === */
     for (const sensor of orderedSensors) {
       const item = canvases[sensor];
       if (!item || item.suffix === "vitr_smer") continue;
@@ -685,7 +685,6 @@ class PocasiMeteoCard extends HTMLElement {
 
       const { min, max } = computeMinMax(points);
       
-      // ČTENÍ BODU F: Barvu si karta vytáhne přímo z atributu senzoru!
       const sState = hass.states[sensor];
       const color = sState ? (sState.attributes.graph_color || "#3b82f6") : "#3b82f6";
 
@@ -703,7 +702,7 @@ class PocasiMeteoCard extends HTMLElement {
       `;
     }
 
-    /* === VYVKRESLENÍ VĚTRNÉ RŮŽICE === */
+    /* === VYKRESLENÍ VĚTRNÉ RŮŽICE === */
     const windSensor = orderedSensors.find(s => s.endsWith("vitr_smer"));
 
     if (windSensor && history[windSensor] && history[windSensor].length) {
@@ -749,7 +748,7 @@ class PocasiMeteoCard extends HTMLElement {
             <span>Mode: ${mode.toFixed(1)}°</span>
           </div>
           <div class="pm-legend-item">
-            <span class="pm-legend-color" style="background:rgba(255,165,0,0.8); row-gap:0;"></span>
+            <span class="pm-legend-color" style="background:rgba(255,165,0,0.8);"></span>
             <span>Var: ±${vari.toFixed(1)}°</span>
           </div>
         `;
