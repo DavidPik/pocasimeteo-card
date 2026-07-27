@@ -90,34 +90,6 @@ const COLOR_MAP = {
   pm1v: "#9575cd"
 };
 
-/* === BARVY === */
-const COLOR_MAP = {
-  /* === Teplota === */
-  teplotavnejsi: "#ff6b3d",   // jasná oranžová (venkovní)
-  teplotavnitrni: "#ffa86b",  // světlejší oranžová (vnitřní)
-  /* === Vlhkost === */
-  vlhkostvnejsi: "#1e88e5",   // sytá modrá (venkovní)
-  vlhkostvnitrni: "#64b5f6",  // světlejší modrá (vnitřní)
-  /* === Tlak === */
-  tlakrel: "#8e24aa",         // fialová
-  /* === Vítr === */
-  vitr: "#43a047",            // základní zelená
-  vitrnarazy: "#2e7d32",      // tmavší zelená (nárazy)
-  vitrsmer: "#009688",        // tyrkysová (směr) – odlišná od vlhkosti
-  /* === Srážky === */
-  rainintensity: "#0288d1",   // modrá s nádechem do aqua
-  /* === Slunce === */
-  slunzareni: "#ffb300",      // jasná žlutá/oranžová
-  /* === UV === */
-  uvindex: "#fdd835",         // žlutá
-  /* === CO₂ === */
-  co2: "#6d4c41",             // hnědá
-  /* === Prach === */
-  pm1: "#7e57c2",             // světlejší fialová
-  pm2: "#5e35b1",             // tmavší fialová
-  pm1v: "#9575cd"             // pastelová fialová
-};
-
 const GRID_COLOR = "rgba(255,255,255,0.2)";
 
 const WIND_DIR_LABELS = [
