@@ -552,12 +552,21 @@ class PocasiMeteoCard extends HTMLElement {
 
     const d = entity.attributes;
     
-    // ČTENÍ BODŮ C, D: Karta si vezme rovnou hotové seznamy skutečných entit z weather
+    // NEPRŮSTŘELNÉ ŘEŠENÍ: Karta načte entity rovnou z hotových polí z weather.py
     const primarySensors = Array.isArray(d.primary_sensors) ? d.primary_sensors : [];
     const secondarySensors = Array.isArray(d.secondary_sensors) ? d.secondary_sensors : [];
     
-    // Spojíme je do jednoho pole pro stažení historie
-    const orderedSensors = [...primarySensors, ...secondarySensors];
+    // Spojíme je do jednoho pole entit, které reálně v systému existují
+    const sensorEntities = [];
+    for (const entityId of [...primarySensors, ...secondarySensors]) {
+      if (hass.states[entityId]) {
+        if (!this.config.hide_sensors.includes(entityId.split("_").pop().toLowerCase())) {
+          sensorEntities.push(entityId);
+        }
+      }
+    }
+
+    const orderedSensors = [...sensorEntities];
 
     const headerTitle = this.shadowRoot.getElementById("header-title");
     const headerTimestamp = this.shadowRoot.getElementById("header-timestamp");
@@ -597,20 +606,18 @@ class PocasiMeteoCard extends HTMLElement {
     const canvases = {};
     const history = {};
 
-    // Smyčka pro dynamické generování dlaždic grafů
+    // Smyčka pro generování dlaždic grafů
     for (const sensor of orderedSensors) {
       const s = hass.states[sensor];
       if (!s) continue;
 
-      // Zjistíme čisté vnitřní ID odříznutím konce entity (např. teplota_vnejsi)
-      const suffix = sensor.split(".").pop().replace(/^[a-zA-Z0-9]+_/, "");
+      // Zjistíme čisté vnitřní ID odříznutím konce (např. teplota_venkovni)
+      const suffix = sensor.replace(/^sensor\.[a-zA-Z0-9]+_/, "");
 
       const tile = document.createElement("div");
       tile.classList.add("pm-graph-tile");
 
       const unit = s.attributes.unit_of_measurement || "";
-      
-      // ČTENÍ BODU E: Název si karta přečte přímo ze systému Home Assistant!
       const prettyName = s.attributes.friendly_name || suffix;
 
       const title = document.createElement("div");
@@ -628,7 +635,6 @@ class PocasiMeteoCard extends HTMLElement {
       tile.appendChild(canvas);
       tile.appendChild(legend);
 
-      // Rozřadíme dlaždici podle toho, v jakém poli z weather přišla
       if (primarySensors.includes(sensor)) {
         primaryGraphs.appendChild(tile);
       } else {
