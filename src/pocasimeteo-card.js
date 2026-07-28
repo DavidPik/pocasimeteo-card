@@ -31,6 +31,7 @@ Chart.register(
   RadialLinearScale
 );
 
+const NON_GRAPH_SENSORS = ["srazky_den"];
 const GRID_COLOR = "rgba(255,255,255,0.2)";
 
 const WIND_DIR_LABELS = [
