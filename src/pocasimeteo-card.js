@@ -676,9 +676,9 @@ class PocasiMeteoCard extends HTMLElement {
     for (const sensor of orderedSensors) {
       const item = canvases[sensor];
       if (!item || item.suffix === "vitr_smer") continue;
-      if (!history[sensor] || !history[sensor].length) continue;
+      if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
 
-      const points = historyToPoints(history[sensor]);
+      const points = historyToPoints(history[sensor][0]);
       if (points.length < 2) continue;
 
       const { canvas, tile, prettyName, legend, suffix } = item;
@@ -711,8 +711,8 @@ class PocasiMeteoCard extends HTMLElement {
     /* === VYKRESLENÍ VĚTRNÉ RŮŽICE === */
     const windSensor = orderedSensors.find(s => s.endsWith("vitr_smer"));
 
-    if (windSensor && history[windSensor] && history[windSensor].length) {
-      const points = historyToPoints(history[windSensor]);
+    if (windSensor && history[windSensor] && history[windSensor][0] && history[windSensor][0].length) {
+      const points = historyToPoints(history[windSensor][0]);
       if (points.length >= 2) {
         const item = canvases[windSensor];
         const { canvas, tile, prettyName, legend } = item;
