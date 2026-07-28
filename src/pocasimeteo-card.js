@@ -712,8 +712,8 @@ class PocasiMeteoCard extends HTMLElement {
     /* === VYKRESLENÍ VĚTRNÉ RŮŽICE === */
     const windSensor = orderedSensors.find(s => s.endsWith("vitr_smer"));
 
-    if (windSensor && history[windSensor] && history[windSensor][0] && history[windSensor][0].length) {
-      const points = historyToPoints(history[windSensor][0]);
+    if (windSensor && history[windSensor] && history[windSensor].length) {
+      const points = historyToPoints(history[windSensor]);
       if (points.length >= 2) {
         const item = canvases[windSensor];
         const { canvas, tile, prettyName, legend } = item;
@@ -726,8 +726,12 @@ class PocasiMeteoCard extends HTMLElement {
 
         const bins = buildWindRose(points);
 
-        const avg = Number(d.vitr_smer_value || 0);
-        const mode = Number(d.vitr_smer_value || 0);
+        const wState = hass.states[windSensor];
+        const currentAngle = wState ? Number(wState.state) : 0;
+
+        // Pokud by stav nebyl číselný, použijeme jako bezpečný fallback průměr z historie
+        const avg = !isNaN(currentAngle) ? currentAngle : (points.reduce((a, b) => a + b.y, 0) / points.length);
+        const mode = avg; 
         const vari = 0.0;
 
         const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
@@ -748,15 +752,15 @@ class PocasiMeteoCard extends HTMLElement {
         legend.innerHTML = `
           <div class="pm-legend-item">
             <span class="pm-legend-color" style="background:#ff0000;"></span>
-            <span>Avg: ${avg.toFixed(1)}°</span>
+            <span>Avg: ${avg.toFixed(0)}°</span>
           </div>
           <div class="pm-legend-item">
             <span class="pm-legend-color" style="background:#0000ff;"></span>
-            <span>Mode: ${mode.toFixed(1)}°</span>
+            <span>Mode: ${mode.toFixed(0)}°</span>
           </div>
           <div class="pm-legend-item">
             <span class="pm-legend-color" style="background:rgba(255,165,0,0.8);"></span>
-            <span>Var: ±${vari.toFixed(1)}°</span>
+            <span>Var: ±${vari.toFixed(0)}°</span>
           </div>
         `;
       }
