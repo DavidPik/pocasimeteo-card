@@ -149,8 +149,9 @@ function createLineChartConfig(points, cleanName, color, textColor) {
   const { min, max, minPoint, maxPoint } = computeMinMax(points);
   const rgba = hexToRgba(color, 0.25);
 
-  const isTemperature = cleanName.toLowerCase().includes('teplota');
-  const yMinAxis = isTemperature ? undefined : 0;
+  const nameLower = cleanName.toLowerCase();
+  const isDynamic = nameLower.includes('teplota') || nameLower.includes('tlak');
+  const yMinAxis = isDynamic ? undefined : 0;
 
   return {
     type:'line',
