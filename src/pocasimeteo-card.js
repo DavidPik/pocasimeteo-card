@@ -712,8 +712,12 @@ class PocasiMeteoCard extends HTMLElement {
     /* === VYKRESLENÍ VĚTRNÉ RŮŽICE === */
     const windSensor = orderedSensors.find(s => s.endsWith("vitr_smer"));
 
-    if (windSensor && history[windSensor] && history[windSensor].length) {
-      const points = historyToPoints(history[windSensor]);
+    // OPRAVA: Doplněno bezpečné ověření dvourozměrného pole historie [0] z HA API
+    if (windSensor && history[windSensor] && history[windSensor][0] && history[windSensor][0].length) {
+      
+      // OPRAVA: Do pomocné funkce předáme čisté pole stavů z indexu 0
+      const points = historyToPoints(history[windSensor][0]);
+      
       if (points.length >= 2) {
         const item = canvases[windSensor];
         const { canvas, tile, prettyName, legend } = item;
@@ -729,7 +733,7 @@ class PocasiMeteoCard extends HTMLElement {
         const wState = hass.states[windSensor];
         const currentAngle = wState ? Number(wState.state) : 0;
 
-        // Pokud by stav nebyl číselný, použijeme jako bezpečný fallback průměr z historie
+        // Pokud by aktuální stav nebyl číselný (např. při výpadku), spočítáme průměr z historie
         const avg = !isNaN(currentAngle) ? currentAngle : (points.reduce((a, b) => a + b.y, 0) / points.length);
         const mode = avg; 
         const vari = 0.0;
