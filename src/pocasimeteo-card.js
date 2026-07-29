@@ -155,7 +155,7 @@ function createLineChartConfig(points, cleanName, color, textColor) {
       plugins:{ tooltip:{}, legend:{display:false} },
       scales:{
         x:{ type:'time', time:{unit:'hour'}, ticks:{color:textColor}, grid:{color:GRID_COLOR} },
-        y:{ ticks:{color:textColor}, grid:{color:GRID_COLOR} }
+        y:{ min:yMinAxis, ticks:{color:textColor}, grid:{color:GRID_COLOR} }
       }
     }
   };
