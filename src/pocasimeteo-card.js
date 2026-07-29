@@ -1,4 +1,4 @@
-/*  =======  POCASIMETEO CARD – BEZPEČNÝ PRODUKČNÍ KÓD (ČÁST 1) =======  */
+/*  =======  POCASIMETEO CARD – GENIÁLNÍ DYNAMICKÁ ARCHITEKTURA =======  */
 
 import {
   Chart,
@@ -290,7 +290,63 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         let ty = my - boxHeight - 10;
 
         if (tx + boxWidth > chart.width) tx = chart.width - boxWidth - 4;
-        if (ty PočasíMeteo</h2><p style="opacity:0.7;">Backendová komponenta není dostupná (chybí data senzorů).</p>';
+        
+        if (chart.chartArea) {
+          if (chart.chartArea.top > ty) {
+            ty = my + 10;
+          }
+        }
+
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = theme.bgColor + 'f0';
+        ctx.strokeStyle = theme.textColor + '80';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(tx, ty, boxWidth, boxHeight, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.shadowColor = 'transparent';
+        ctx.fillStyle = theme.textColor;
+        ctx.fillText(tooltipText, tx + paddingX, ty + boxHeight / 2);
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+  };
+}
+
+class PocasiMeteoCard extends HTMLElement {
+  constructor() {
+    super();
+    this._initialized = false;
+    this._rendering = false;
+    this._charts = {};
+    this._lastAttributes = null;
+    this._lastRender = 0;
+    this._updateInterval = null;
+    this._lastFetch = 0;
+  }
+
+  setConfig(config) {
+    if (!config.entity) throw new Error('entity is required');
+    this.config = { show_graphs: true, hide_sensors: [], ...config };
+    this.attachShadow({ mode:'open' });
+  }
+
+  set hass(hass) {
+    const entity = hass.states[this.config.entity];
+
+    if (!this._initialized) {
+      this._initialize();
+      this._initialized = true;
+    }
+
+    if (!entity || !entity.attributes || !entity.attributes.sensors) {
+      const card = this.shadowRoot.querySelector('.pm-card');
+      if (card) {
+        card.innerHTML = '<h2>PočasíMeteo</h2><p style="opacity:0.7;">Backendová komponenta není dostupná (chybí data senzorů).</p>';
       }
       return;
     }
@@ -335,7 +391,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
             '<div class="pm-header-title" id="header-title"></div>' +
             '<div class="pm-header-timestamp" id="header-timestamp"></div>' +
           '</div>' +
-          '<div class="pm-header-bottom">' +
+          '<div class="PM-header-bottom">' +
             '<div class="pm-header-main" id="header-main"></div>' +
             '<div class="pm-header-details" id="header-details"></div>' +
           '</div>' +
@@ -431,9 +487,6 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
 
     const activeEntityIds = Object.keys(canvases);
     await Promise.all(activeEntityIds.map(async entityId => {
-      const item = canvases[entityId];
-      if (NON_GRAPH_SENSORS.includes(item.id)) return;
-
       const url = '/api/history/period/' + since + '?filter_entity_id=' + entityId + '&minimal_response&significant_changes_only=false';
       try {
         const resp = await fetch(url, {
@@ -458,7 +511,22 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       if (points.length === 1) {
         points.push({ x: Date.now(), y: points[0].y });
       }
-      if (points.length  a + b.y, 0) / points.length);
+      
+      if (2 > points.length) continue;
+
+      const { canvas, tile, prettyName, legend, id } = item;
+      const ctx = canvas.getContext('2d');
+
+      if (this._charts[entityId]) this._charts[entityId].destroy();
+      canvas.style.backgroundColor = theme.bgColor;
+      tile.style.backgroundColor = theme.bgColor;
+
+      if (id === 'vitr_smer') {
+        const bins = buildWindRose(points);
+        const sState = hass.states[entityId];
+        const currentAngle = sState ? Number(sState.state) : 0;
+        const totalY = points.reduce((acc, p) => acc + p.y, 0);
+        const avg = !isNaN(currentAngle) ? currentAngle : (totalY / points.length);
         const mode = avg;
         const vari = 0.0;
 
