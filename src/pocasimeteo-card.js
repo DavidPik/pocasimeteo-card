@@ -112,6 +112,39 @@ function hexToRgba(hex, alpha) {
   return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
 
+async function fetchWithRetry(url, hass, options = {}, retry = true) {
+  const getToken = () =>
+    hass.connection?.options?.accessToken ||
+    hass.auth?.data?.access_token ||
+    null;
+
+  let token = getToken();
+  if (!token) {
+    throw new Error('Missing access token');
+  }
+
+  let resp = await fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+    },
+    credentials: 'same-origin',
+  });
+
+  if (resp.status === 401 && retry) {
+    // počkáme, než HA obnoví token v objektu hass
+    await new Promise(r => setTimeout(r, 1500));
+    token = getToken();
+    if (!token) {
+      throw new Error('Missing access token after retry');
+    }
+    return fetchWithRetry(url, hass, options, false);
+  }
+
+  return resp;
+}
+
 function createLineChartConfig(points, cleanName, color, textColor) {
   const { min, max, minPoint, maxPoint } = computeMinMax(points);
   const rgba = hexToRgba(color, 0.25);
@@ -501,13 +534,12 @@ class PocasiMeteoCard extends HTMLElement {
     await Promise.all(activeEntityIds.map(async entityId => {
       const url = '/api/history/period/' + since + '?filter_entity_id=' + entityId + '&minimal_response&significant_changes_only=false';
       try {
-        const resp = await fetch(url, {
-          method:'GET',
-          headers:{ 'Authorization':'Bearer ' + token, 'Content-Type':'application/json' },
-          credentials:'same-origin'
+        const resp = await fetchWithRetry(url, hass, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
         });
         if (resp.ok) history[entityId] = await resp.json();
-      } catch(e) {}
+      } catch (e) {}
     }));
 
     const host = this.shadowRoot.host;
