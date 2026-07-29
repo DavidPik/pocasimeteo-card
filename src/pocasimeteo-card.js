@@ -612,8 +612,10 @@ class PocasiMeteoCard extends HTMLElement {
       const s = hass.states[sensor];
       if (!s) continue;
 
-      // Zjistíme čisté vnitřní ID odříznutím konce (např. teplota_venkovni)
-      const suffix = sensor.replace(/^sensor\.[a-zA-Z0-9]+_/, "");
+      // NEPRŮSTŘELNÉ ŘEŠENÍ: Získáme vnitřní ID bezpečně z metadat integrace,
+      // čímž zcela eliminujeme jakékoliv automatické prefixy oblasti (venku_gar632_)
+      const meta = sensorsMeta.find(m => m.entity_id === sensor);
+      const suffix = meta ? meta.id : sensor.split(".").pop().replace(/^[a-zA-Z0-9]+_/, "");
 
       const tile = document.createElement("div");
       tile.classList.add("pm-graph-tile");
@@ -677,9 +679,15 @@ class PocasiMeteoCard extends HTMLElement {
     for (const sensor of orderedSensors) {
       const item = canvases[sensor];
       if (!item || item.suffix === "vitr_smer") continue;
-      if (!history[sensor] || !history[sensor][0] || !history[sensor][0].length) continue;
+      if (!history[sensor] || !history[sensor] || !history[sensor].length) continue;
 
-      const points = historyToPoints(history[sensor][0]);
+      const points = historyToPoints(history[sensor]);
+      
+      // Pojistka pro konstantní nulové srážky (vytvoří vodorovnou linku)
+      if (points.length === 1) {
+        points.push({ x: Date.now(), y: points[0].y });
+      }
+      
       if (points.length < 2) continue;
 
       const { canvas, tile, prettyName, legend, suffix } = item;
