@@ -116,7 +116,6 @@ function createLineChartConfig(points, cleanName, color, textColor) {
   const { min, max, minPoint, maxPoint } = computeMinMax(points);
   const rgba = hexToRgba(color, 0.25);
 
-  // Bezpečné určení minima osy: Pokud název neobsahuje slovo Teplota, vynutíme nulu
   const isTemperature = cleanName.toLowerCase().includes('teplota');
   const yMinAxis = isTemperature ? undefined : 0;
 
@@ -248,14 +247,16 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.fillText(label, x, y);
       });
 
-      const offsetLine = R - 20;
-      const offsetVar = R - 10;
+      const avgLineLen = R - 5;    
+      const modeLineLen = R - 25;  
+      const offsetVar = R - 10;    
+
       const avgAngle = (avg - 90) * Math.PI / 180;
       const modeAngle = (mode - 90) * Math.PI / 180;
       const startVar = (avg - vari - 90) * Math.PI / 180;
       const endVar = (avg + vari - 90) * Math.PI / 180;
 
-      ctx.fillStyle = 'rgba(255,165,0,0.25)';
+      ctx.fillStyle = 'rgba(255,165,0,0.22)';
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, offsetVar, startVar, endVar);
@@ -263,16 +264,19 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       ctx.fill();
 
       ctx.strokeStyle = '#ff0000';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([]); 
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(avgAngle)*offsetLine, cy + Math.sin(avgAngle)*offsetLine);
+      ctx.lineTo(cx + Math.cos(avgAngle)*avgLineLen, cy + Math.sin(avgAngle)*avgLineLen);
       ctx.stroke();
 
       ctx.strokeStyle = '#0000ff';
+      ctx.lineWidth = 5.0;
+      ctx.setLineDash([]); 
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(modeAngle)*offsetLine, cy + Math.sin(modeAngle)*offsetLine);
+      ctx.lineTo(cx + Math.cos(modeAngle)*modeLineLen, cy + Math.sin(modeAngle)*modeLineLen);
       ctx.stroke();
 
       if (chart.$windHover && chart.$mouse) {
@@ -334,9 +338,13 @@ class PocasiMeteoCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.entity) throw new Error('entity is required');
+    if (!config.entity) {
+      throw new Error('entity is required');
+    }
     this.config = { show_graphs: true, hide_sensors: [], ...config };
-    this.attachShadow({ mode:'open' });
+    
+    const shadowMode = 'open';
+    this.attachShadow({ mode: shadowMode });
   }
 
   set hass(hass) {
@@ -368,8 +376,8 @@ class PocasiMeteoCard extends HTMLElement {
 
     this._update(hass).finally(() => { this._rendering = false; });
   }
-
-  _initialize() {
+ 
+   _initialize() {
     this.shadowRoot.innerHTML = '<style>' +
         '.pm-card { padding:0; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:0; }' +
         '.pm-header-section { padding:16px; background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; gap:12px; }' +
@@ -395,7 +403,7 @@ class PocasiMeteoCard extends HTMLElement {
             '<div class="pm-header-title" id="header-title"></div>' +
             '<div class="pm-header-timestamp" id="header-timestamp"></div>' +
           '</div>' +
-          '<div class="PM-header-bottom">' +
+          '<div class="pm-header-bottom">' +
             '<div class="pm-header-main" id="header-main"></div>' +
             '<div class="pm-header-details" id="header-details"></div>' +
           '</div>' +
@@ -468,9 +476,9 @@ class PocasiMeteoCard extends HTMLElement {
         const unit = sState.attributes.unit_of_measurement || '';
         const prettyName = sState.attributes.friendly_name || s.id;
 
-        const title = document.createElement('div');
-        title.classList.add('pm-graph-title');
-        title.textContent = prettyName + (unit ? ' - ' + unit : '');
+        const titleElement = document.createElement('div');
+        titleElement.classList.add('pm-graph-title');
+        titleElement.textContent = prettyName + (unit ? ' - ' + unit : '');
 
         const canvas = document.createElement('canvas');
         canvas.classList.add('pm-graph');
@@ -479,7 +487,7 @@ class PocasiMeteoCard extends HTMLElement {
         const legend = document.createElement('div');
         legend.classList.add('pm-legend');
 
-        tile.appendChild(title);
+        tile.appendChild(titleElement);
         tile.appendChild(canvas);
         tile.appendChild(legend);
 
@@ -509,8 +517,8 @@ class PocasiMeteoCard extends HTMLElement {
       const item = canvases[entityId];
       if (!item) continue;
 
-      if (!history[entityId] || !history[entityId][0] || !history[entityId][0].length) continue;
-      const points = historyToPoints(history[entityId][0]);
+      if (!history[entityId] || !history[entityId].length) continue;
+      const points = historyToPoints(history[entityId]);
 
       if (points.length === 1) {
         points.push({ x: Date.now(), y: points[0].y });
@@ -528,11 +536,10 @@ class PocasiMeteoCard extends HTMLElement {
       if (id === 'vitr_smer') {
         const bins = buildWindRose(points);
         const sState = hass.states[entityId];
-        const currentAngle = sState ? Number(sState.state) : 0;
-        const totalY = points.reduce((acc, p) => acc + p.y, 0);
-        const avg = !isNaN(currentAngle) ? currentAngle : (totalY / points.length);
-        const mode = avg;
-        const vari = 0.0;
+
+        const avg = sState ? Number(sState.attributes.vitr_smer_avg ?? 0) : 0;
+        const mode = sState ? Number(sState.attributes.vitr_smer_mode ?? 0) : 0;
+        const vari = sState ? Number(sState.attributes.vitr_smer_var ?? 0) : 0;
 
         const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
 
