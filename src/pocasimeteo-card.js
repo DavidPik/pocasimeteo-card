@@ -116,6 +116,10 @@ function createLineChartConfig(points, cleanName, color, textColor) {
   const { min, max, minPoint, maxPoint } = computeMinMax(points);
   const rgba = hexToRgba(color, 0.25);
 
+  // Bezpečné určení minima osy: Pokud název neobsahuje slovo Teplota, vynutíme nulu
+  const isTemperature = cleanName.toLowerCase().includes('teplota');
+  const yMinAxis = isTemperature ? undefined : 0;
+
   return {
     type:'line',
     data:{
