@@ -517,8 +517,8 @@ class PocasiMeteoCard extends HTMLElement {
       const item = canvases[entityId];
       if (!item) continue;
 
-      if (!history[entityId] || !history[entityId].length) continue;
-      const points = historyToPoints(history[entityId]);
+      if (!history[entityId] || !history[entityId][0] || !history[entityId][0].length) continue;
+      const points = historyToPoints(history[entityId][0]);
 
       if (points.length === 1) {
         points.push({ x: Date.now(), y: points[0].y });
