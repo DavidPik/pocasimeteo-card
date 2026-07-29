@@ -205,7 +205,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.stroke();
       });
 
-      [0,45,90,135,180,225,270,315].forEach(deg => {
+      [0, 45, 90, 135, 180, 225, 270, 315].forEach(deg => {
         const a = (deg - 90) * Math.PI / 180;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
