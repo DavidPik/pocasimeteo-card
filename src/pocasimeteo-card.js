@@ -31,20 +31,11 @@ Chart.register(
   RadialLinearScale
 );
 
-const NON_GRAPH_SENSORS = ['srazky_den'];
 const GRID_COLOR = 'rgba(255,255,255,0.2)';
 
 const WIND_DIR_LABELS = [
   'N','NNE','NE','ENE','E','ESE','SE','SSE',
   'S','SSW','SW','WSW','W','WNW','NW','NNW'
-];
-
-const STEPPED_SENSORS = [
-  'vitr_rychlost',
-  'vitr_narazy',
-  'vitr_smer',
-  'intenzita_srazek',
-  'srazky_den'
 ];
 
 function safeCssVar(el, name, fallback) {
@@ -153,14 +144,14 @@ async function fetchWithRetry(url, hass, options = {}, retry = true) {
   return resp;
 }
 
-function createLineChartConfig(points, cleanName, color, textColor, sensorId) {
+function createLineChartConfig(points, cleanName, color, textColor, sensorId, sensorStyle) {
   const { min, max, minPoint, maxPoint } = computeMinMax(points);
   const rgba = hexToRgba(color, 0.25);
 
   const nameLower = cleanName.toLowerCase();
   const isDynamic = nameLower.includes('teplota') || nameLower.includes('tlak');
   const yMinAxis = isDynamic ? undefined : 0;
-  const isStepped = STEPPED_SENSORS.includes(sensorId);
+  const isStepped = sensorStyle === 'stepped';
 
   return {
     type:'line',
@@ -508,7 +499,13 @@ class PocasiMeteoCard extends HTMLElement {
     ];
 
     for (const section of targetSections) {
-      const filteredMeta = sensorsMeta.filter(s => s.type === section.type);
+      const filteredMeta = sensorsMeta.filter(s =>
+        s.type === section.type &&
+        s.visible !== false &&
+        !this.config.hide_sensors.includes(s.id)
+      );
+      
+      filteredMeta.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
       
       for (const s of filteredMeta) {
         const sState = hass.states[s.entity_id];
@@ -607,7 +604,11 @@ class PocasiMeteoCard extends HTMLElement {
         const sState = hass.states[entityId];
         const color = sState ? (sState.attributes.graph_color || '#3b82f6') : '#3b82f6';
 
-        this._charts[entityId] = new Chart(ctx, createLineChartConfig(points, prettyName, color, theme.textColor, id));
+        const sensorStyle = sState?.attributes?.graph_style || 'smooth';
+        this._charts[entityId] = new Chart(
+          ctx,
+          createLineChartConfig(points, prettyName, color, theme.textColor, id, sensorStyle)
+        );
 
         legend.innerHTML = '<div class="pm-legend-item"><span class="pm-legend-color" style="background:red;"></span><span>Min: ' + min.toFixed(1) + '</span></div>' +
           '<div class="pm-legend-item"><span class="pm-legend-color" style="background:green;"></span><span>Max: ' + max.toFixed(1) + '</span></div>';
