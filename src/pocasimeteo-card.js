@@ -160,7 +160,7 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId) {
   const nameLower = cleanName.toLowerCase();
   const isDynamic = nameLower.includes('teplota') || nameLower.includes('tlak');
   const yMinAxis = isDynamic ? undefined : 0;
-  const isStepped = STEPPED_SENSORS.include(sensorId);
+  const isStepped = STEPPED_SENSORS.includes(sensorId);
 
   return {
     type:'line',
