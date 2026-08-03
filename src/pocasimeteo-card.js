@@ -145,7 +145,15 @@ async function fetchWithRetry(url, hass, options = {}, retry = true) {
   return resp;
 }
 
-function createLineChartConfig(points, cleanName, color, textColor) {
+const STEPPED_SENSORS = [
+  'vitr',
+  'vitr_narazy',
+  'vitr_smer',
+  'intenzita_srazek',
+  'srazky_den'
+];
+
+function createLineChartConfig(points, cleanName, color, textColor, sensorId) {
   const { min, max, minPoint, maxPoint } = computeMinMax(points);
   const rgba = hexToRgba(color, 0.25);
 
@@ -162,7 +170,8 @@ function createLineChartConfig(points, cleanName, color, textColor) {
           data:points,
           borderColor:color,
           backgroundColor:rgba,
-          tension:0.3,
+          tension: isStepped ? 0 : 0.3,
+          stepped: isStepped ? true : false,
           pointRadius:0,
           borderWidth:2
         },
@@ -597,7 +606,7 @@ class PocasiMeteoCard extends HTMLElement {
         const sState = hass.states[entityId];
         const color = sState ? (sState.attributes.graph_color || '#3b82f6') : '#3b82f6';
 
-        this._charts[entityId] = new Chart(ctx, createLineChartConfig(points, prettyName, color, theme.textColor));
+        this._charts[entityId] = new Chart(ctx, createLineChartConfig(points, prettyName, color, theme.textColor, id));
 
         legend.innerHTML = '<div class="pm-legend-item"><span class="pm-legend-color" style="background:red;"></span><span>Min: ' + min.toFixed(1) + '</span></div>' +
           '<div class="pm-legend-item"><span class="pm-legend-color" style="background:green;"></span><span>Max: ' + max.toFixed(1) + '</span></div>';
