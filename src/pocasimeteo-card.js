@@ -39,6 +39,14 @@ const WIND_DIR_LABELS = [
   'S','SSW','SW','WSW','W','WNW','NW','NNW'
 ];
 
+const STEPPED_SENSORS = [
+  'vitr_rychlost',
+  'vitr_narazy',
+  'vitr_smer',
+  'intenzita_srazek',
+  'srazky_den'
+];
+
 function safeCssVar(el, name, fallback) {
   try {
     const v = getComputedStyle(el).getPropertyValue(name).trim();
@@ -144,14 +152,6 @@ async function fetchWithRetry(url, hass, options = {}, retry = true) {
 
   return resp;
 }
-
-const STEPPED_SENSORS = [
-  'vitr',
-  'vitr_narazy',
-  'vitr_smer',
-  'intenzita_srazek',
-  'srazky_den'
-];
 
 function createLineChartConfig(points, cleanName, color, textColor, sensorId) {
   const { min, max, minPoint, maxPoint } = computeMinMax(points);
