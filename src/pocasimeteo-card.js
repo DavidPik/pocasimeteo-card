@@ -470,15 +470,15 @@ class PocasiMeteoCard extends HTMLElement {
     const primaryGraphs = this.shadowRoot.getElementById('primary-graphs');
     const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
 
-    headerTitle.innerHTML = d.lokalita_stanice || d.station_name || '';
+    headerTitle.innerHTML += `<div style="font-size:16px; opacity:0.8;">${entity.state}</div>`;
     headerTimestamp.innerHTML = d.timestamp || '';
-    headerMain.innerHTML = 'Teplota venkovní: ' + (d.teplota_vnejsi_value ?? entity.attributes.temperature) + '°C';
+    headerMain.innerHTML = `${entity.attributes.temperature} ${entity.attributes.temperature_unit}`;
 
-    headerDetails.innerHTML = '<div>Tlak: ' + (entity.attributes.pressure ?? '') + ' hPa</div>' +
-      '<div>Vlhkost: ' + (entity.attributes.humidity ?? '') + '%</div>' +
-      '<div>Vítr: ' + (entity.attributes.wind_speed ?? '') + ' m/s (' + degToDirection(Number(entity.attributes.wind_bearing)) + ')</div>' +
-      '<div>Nárazy: ' + (entity.attributes.wind_gust_speed ?? '') + ' m/s</div>' +
-      '<div>Srážky dnes: ' + (d.srazky_den ?? 0) + ' mm</div>';
+    headerDetails.innerHTML = `<div>Tlak: ${entity.attributes.pressure} ${entity.attributes.pressure_unit}</div>` +
+      `<div>Vlhkost: ${entity.attributes.humidity}%</div>` +
+      `<div>Vítr: ${entity.attributes.wind_speed} ${entity.attributes.wind_speed_unit} (${degToDirection(entity.attributes.wind_bearing)})</div>` +
+      `<div>Nárazy: ${entity.attributes.wind_gust} ${entity.attributes.wind_speed_unit}</div>` +
+      `<div>Srážky dnes: ${d.srazky_den ?? 0} ${entity.attributes.precipitation_unit}</div>`;
 
     primaryGraphs.innerHTML = '';
     secondaryGraphs.innerHTML = '';
