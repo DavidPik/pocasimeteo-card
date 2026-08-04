@@ -558,12 +558,15 @@ class PocasiMeteoCard extends HTMLElement {
    * ARCHITEKTURA FRONTENDU: Aktualizuje texty v záhlaví karty z nativních vlastností.
    * Obsahuje vestavěný překlad základních stavů HA do srozumitelné češtiny.
    */
+  /**
+   * ARCHITEKTURA FRONTENDU: Aktualizuje texty a mřížku v záhlaví z nativních vlastností.
+   * Obsahuje bezpečné ošetření chybějících hodnot a textový směr větru.
+   */
   _updateVisualHeader(entity) {
     const d = entity.attributes;
     const headerTitle = this.shadowRoot.getElementById('header-title');
-    const headerTimestamp = this.shadowRoot.getElementById('header-timestamp');
     const headerMain = this.shadowRoot.getElementById('header-main');
-    const headerDetails = this.shadowRoot.getElementById('header-details');
+    const headerGrid = this.shadowRoot.getElementById('header-grid');
 
     // Slovník pro srozumitelné české popisky stavů počasí
     const conditionTranslations = {
@@ -579,7 +582,6 @@ class PocasiMeteoCard extends HTMLElement {
       'rainy': 'Déšť',
       'snowy': 'Sněžení',
       'snowy-rainy': 'Sníh s deštěm',
-      'sunny': 'Slunečno',
       'windy': 'Větrno',
       'windy-variant': 'Silný vítr'
     };
@@ -587,33 +589,39 @@ class PocasiMeteoCard extends HTMLElement {
     const rawState = entity.state;
     const stateText = conditionTranslations[rawState] || rawState; 
     const lokalita = d.lokalita_stanice || d.friendly_name || 'Meteostanice';
+    const cas = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
 
-    headerTitle.innerHTML = `${lokalita}<div style="font-size:16px; opacity:0.8;">${stateText}</div>`;
-    headerTimestamp.innerHTML = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
+    // Vyplnění levé strany (Lokalita, stav, teplota)
+    headerTitle.innerHTML = `<div>${lokalita}</div><div class="pm-header-status">${stateText}</div>`;
     
     const temp = entity.attributes.temperature !== undefined ? entity.attributes.temperature : '--';
-    headerMain.innerHTML = `${temp} °C`;
+    headerMain.innerHTML = `<ha-icon icon="mdi:thermometer" style="color:#ff6b3d; font-size:48px;"></ha-icon> <span>${temp} °C</span>`;
 
     // Čtení nativních vlastností weather entity z HA jádra
     const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
     const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
     
-    // NOVÁ LOGIKA VĚTRU: Spojíme aktuální rychlost, nárazy i textový směr do jednoho boxu
+    // Zpracování síly a nárazů větru
     const windSpeedRaw = entity.attributes.wind_speed;
     const windSpeed = windSpeedRaw !== undefined && windSpeedRaw !== null ? windSpeedRaw : '--';
     
     const gustRaw = entity.attributes.wind_gust;
     const windGust = gustRaw !== undefined && gustRaw !== null ? gustRaw : '--';
     
+    // Bezpečné odvození textového směru větru pomocí vnitřní funkce degToDirection
     const bearingRaw = entity.attributes.wind_bearing;
-    const windDirectionText = bearingRaw !== undefined && bearingRaw !== null ? ' ' + degToDirection(bearingRaw) : '';
+    let windDirectionText = '';
+    if (bearingRaw !== undefined && bearingRaw !== null) {
+      windDirectionText = ' ' + degToDirection(bearingRaw);
+    }
     
-    // Výsledný řetězec: např. "1.6 / 3.5 m/s SSE"
-    const komplektniVitrText = windSpeed + ' / ' + windGust + ' m/s' + windDirectionText;
+    // Sestavení výsledného textu větru: např. "1.6 / 3.5 m/s SSE"
+    const kompletniVitrText = windSpeed + ' / ' + windGust + ' m/s' + windDirectionText;
 
     // Srážky za den z odsouhlaseného extra atributu
     const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
 
+    // Vyplnění pravé strany záhlaví do čistého responzivního layoutu
     headerGrid.innerHTML = 
       '<div class="pm-grid-cell">' +
         '<div class="pm-cell-icon" style="color:#8e24aa;"><ha-icon icon="mdi:gauge"></ha-icon></div>' +
@@ -623,18 +631,17 @@ class PocasiMeteoCard extends HTMLElement {
         '<div class="pm-cell-icon" style="color:#1e88e5;"><ha-icon icon="mdi:water-percent"></ha-icon></div>' +
         '<div class="pm-cell-data"><span class="pm-cell-label">Vlhkost</span><span class="pm-cell-value">' + humidity + ' %</span></div>' +
       '</div>' +
-      '<div class="pm-grid-cell" style="grid-column: span 2;">' + // NOVÝ DESIGN: Box pro vítr roztáhneme přes 2 sloupce, aby se text krásně vešel
+      '<div class="pm-grid-cell" style="grid-column: span 2;">' +
         '<div class="pm-cell-icon" style="color:#2e7d32;"><ha-icon icon="mdi:weather-windy"></ha-icon></div>' +
-        '<div class="pm-cell-data"><span class="pm-cell-label">Síla větru (rychlost / nárazy)</span><span class="pm-cell-value">' + komplektniVitrText + '</span></div>' +
+        '<div class="pm-cell-data"><span class="pm-cell-label">Síla větru (rychlost / nárazy)</span><span class="pm-cell-value">' + kompletniVitrText + '</span></div>' +
       '</div>' +
-      '<div class="pm-grid-cell" style="grid-column: span 2;">' + // Box pro srážky roztáhneme také, aby záhlaví drželo symetrii
+      '<div class="pm-grid-cell" style="grid-column: span 2;">' +
         '<div class="pm-cell-icon" style="color:#0288d1;"><ha-icon icon="mdi:water"></ha-icon></div>' +
         '<div class="pm-cell-data"><span class="pm-cell-label">Srážky dnes</span><span class="pm-cell-value">' + srazkyDen + ' mm</span></div>' +
       '</div>' +
       '<div class="pm-header-timestamp">Aktualizováno: ' + cas + '</div>';
   }
 
-  
   /**
    * ARCHITEKTURA FRONTENDU: Načte historii pro aktivní čidla a vykreslí grafy.
    * Pro každé čidlo z pole d.sensors stahuje historii za posledních 24 hodin zvlášť.
