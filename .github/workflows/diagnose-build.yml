@@ -23,7 +23,6 @@ jobs:
         run: npm ci
 
       - name: Syntax check (node --check) - do not fail workflow
-        id: nodecheck
         continue-on-error: true
         run: |
           echo "=== node --check src/pocasimeteo-card.js ==="
