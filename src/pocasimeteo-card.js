@@ -598,19 +598,42 @@ class PocasiMeteoCard extends HTMLElement {
     const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
     const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
     
-    // Ošetření nárazů větru
+    // NOVÁ LOGIKA VĚTRU: Spojíme aktuální rychlost, nárazy i textový směr do jednoho boxu
+    const windSpeedRaw = entity.attributes.wind_speed;
+    const windSpeed = windSpeedRaw !== undefined && windSpeedRaw !== null ? windSpeedRaw : '--';
+    
     const gustRaw = entity.attributes.wind_gust;
     const windGust = gustRaw !== undefined && gustRaw !== null ? gustRaw : '--';
     
+    const bearingRaw = entity.attributes.wind_bearing;
+    const windDirectionText = bearingRaw !== undefined && bearingRaw !== null ? ' ' + degToDirection(bearingRaw) : '';
+    
+    // Výsledný řetězec: např. "1.6 / 3.5 m/s SSE"
+    const komplektniVitrText = windSpeed + ' / ' + windGust + ' m/s' + windDirectionText;
+
     // Srážky za den z odsouhlaseného extra atributu
     const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
 
-    headerDetails.innerHTML = 
-      `<div>Tlak: ${pressure} hPa</div>` +
-      `<div>Vlhkost: ${humidity}%</div>` +
-      `<div>Nárazy: ${windGust} m/s</div>` +
-      `<div>Srážky dnes: ${srazkyDen} mm</div>`;
+    headerGrid.innerHTML = 
+      '<div class="pm-grid-cell">' +
+        '<div class="pm-cell-icon" style="color:#8e24aa;"><ha-icon icon="mdi:gauge"></ha-icon></div>' +
+        '<div class="pm-cell-data"><span class="pm-cell-label">Tlak vzduchu</span><span class="pm-cell-value">' + pressure + ' hPa</span></div>' +
+      '</div>' +
+      '<div class="pm-grid-cell">' +
+        '<div class="pm-cell-icon" style="color:#1e88e5;"><ha-icon icon="mdi:water-percent"></ha-icon></div>' +
+        '<div class="pm-cell-data"><span class="pm-cell-label">Vlhkost</span><span class="pm-cell-value">' + humidity + ' %</span></div>' +
+      '</div>' +
+      '<div class="pm-grid-cell" style="grid-column: span 2;">' + // NOVÝ DESIGN: Box pro vítr roztáhneme přes 2 sloupce, aby se text krásně vešel
+        '<div class="pm-cell-icon" style="color:#2e7d32;"><ha-icon icon="mdi:weather-windy"></ha-icon></div>' +
+        '<div class="pm-cell-data"><span class="pm-cell-label">Síla větru (rychlost / nárazy)</span><span class="pm-cell-value">' + komplektniVitrText + '</span></div>' +
+      '</div>' +
+      '<div class="pm-grid-cell" style="grid-column: span 2;">' + // Box pro srážky roztáhneme také, aby záhlaví drželo symetrii
+        '<div class="pm-cell-icon" style="color:#0288d1;"><ha-icon icon="mdi:water"></ha-icon></div>' +
+        '<div class="pm-cell-data"><span class="pm-cell-label">Srážky dnes</span><span class="pm-cell-value">' + srazkyDen + ' mm</span></div>' +
+      '</div>' +
+      '<div class="pm-header-timestamp">Aktualizováno: ' + cas + '</div>';
   }
+
   
   /**
    * ARCHITEKTURA FRONTENDU: Načte historii pro aktivní čidla a vykreslí grafy.
