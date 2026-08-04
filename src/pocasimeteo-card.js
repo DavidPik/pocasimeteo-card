@@ -78,10 +78,17 @@ function buildWindRose(points) {
 }
 
 function historyToPoints(raw) {
-  return raw.map(p => ({
-    x: Date.parse(p.last_changed),
-    y: Number(p.state)
-  })).filter(p => !isNaN(p.x) && !isNaN(p.y));
+  return raw.map(p => {
+    const ts = p.last_changed || p.last_updated;
+    const val = Number(p.state);
+
+    if (!ts || isNaN(val)) return null;
+
+    return {
+      x: Date.parse(ts),
+      y: val
+    };
+  }).filter(p => p && !isNaN(p.x) && !isNaN(p.y));
 }
 
 function computeMinMax(points) {
@@ -557,7 +564,28 @@ class PocasiMeteoCard extends HTMLElement {
       const item = canvases[entityId];
       if (!item) continue;
 
-      if (!history[entityId] || !history[entityId][0] || !history[entityId][0].length) continue;
+      if (!history[entityId] || !history[entityId][0] || !history[entityId][0].length) {
+        const sState = hass.states[entityId];
+        if (!sState) continue;
+
+        const val = Number(sState.state);
+        if (isNaN(val)) continue;
+
+        const now = Date.now();
+        const points = [
+          { x: now - 60000, y: val },
+          { x: now, y: val }
+        ];
+
+        this._charts[entityId]?.destroy();
+        this._charts[entityId] = new Chart(
+          canvases[entityId].canvas.getContext('2d'),
+          createLineChartConfig(points, canvases[entityId].prettyName, '#3b82f6', theme.textColor, canvases[entityId].id, 'smooth')
+        );
+
+        continue;
+      }
+      
       const points = historyToPoints(history[entityId][0]);
 
       if (points.length === 1) {
