@@ -481,15 +481,24 @@ class PocasiMeteoCard extends HTMLElement {
     // aby karta reagovala ihned, ale náročné grafy/historii překreslíme jen při změně timestampu z API.
     this._updateVisualHeader(entity);
 
-    const currentApiTimestamp = entity.attributes.timestamp;
-    const nowTs = Date.now();
+    const timeDifference = nowTs - this._lastFetch;
 
-    // Pokud se nezměnil timestamp z API a od posledního fetchování neuplynulo 5 minut,
-    // přeskočíme stahování historie, abychom šetřili síť i procesor HA Green.
-    if (this._lastApiTimestamp === currentApiTimestamp && (nowTs - this._lastFetch  { 
+    // Pokud se nezměnil timestamp z API a zároveň od posledního načtení neuplynulo 5 minut (300 000 ms), přeskočíme to.
+    if (this._lastApiTimestamp === currentApiTimestamp) {
+      if (300000 > timeDifference) {
+        return;
+      }
+    }
+
+    if (this._rendering) return;
+    this._rendering = true;
+
+    this._lastApiTimestamp = currentApiTimestamp;
+    this._lastFetch = nowTs;
+
+    this._updateCharts(hass, entity).finally(() => { 
       this._rendering = false; 
     });
-  }
  
   /**
    * Vykreslí základní HTML kostru a aplikuje CSS styly.
@@ -687,10 +696,49 @@ class PocasiMeteoCard extends HTMLElement {
       if (points.length === 1) {
         points.push({ x: Date.now(), y: points[0].y });
       }
-      if (points.length <span class="pm-legend-color" style="background:#ff0000;"></span><span>Avg: ' + avg.toFixed(0) + '°</span></div>' +
-          '<div class="pm-legend-item"><span class="pm-legend-color" style="background:#0000ff;"></span><span>Mode: ' + mode.toFixed(0) + '°</span></div>' +
-          '<div class="pm-legend-item"><span class="pm-legend-color" style="background:rgba(255,165,0,0.8);"></span><span>Var: ±' + vari.toFixed(0) + '°</span></div>';
-      } else {
+      const points = historyToPoints(history[entityId][0]);
+      if (points.length === 1) {
+        points.push({ x: Date.now(), y: points[0].y });
+      }
+      
+      // Pokračujeme pouze pokud máme v poli 2 nebo více bodů
+      if (points.length > 1) {
+        const { canvas, tile, prettyName, legend, id } = item;
+        const ctx = canvas.getContext('2d');
+
+        if (this._charts[entityId]) this._charts[entityId].destroy();
+        canvas.style.backgroundColor = theme.bgColor;
+        tile.style.backgroundColor = theme.bgColor;
+
+        // Graf typu Větrná růžice
+        if (id === 'vitr_smer') {
+          const bins = buildWindRose(points);
+          const sState = hass.states[entityId];
+
+          const avg = sState ? Number(sState.attributes.vitr_smer_avg ?? 0) : 0;
+          const mode = sState ? Number(sState.attributes.vitr_smer_mode ?? 0) : 0;
+          const vari = sState ? Number(sState.attributes.vitr_smer_var ?? 0) : 0;
+
+          const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
+
+          this._charts[entityId] = new Chart(ctx, {
+            type: 'polarArea',
+            data: { labels: [], datasets: [] },
+            options: {
+              responsive: false,
+              maintainAspectRatio: false,
+              layout: { padding: { top: 20, bottom: 20, left: 10, right: 10 }},
+              scales: { r: { ticks: { display: false }, grid: { display: false }, beginAtZero: true }},
+              plugins: { tooltip: {}, legend: { display: false } }
+            },
+            plugins: [windRosePlugin]
+          });
+
+          legend.innerHTML = 
+            '<div class="pm-legend-item"><span class="pm-legend-color" style="background:#ff0000;"></span><span>Avg: ' + avg.toFixed(0) + '°</span></div>' +
+            '<div class="pm-legend-item"><span class="pm-legend-color" style="background:#0000ff;"></span><span>Mode: ' + mode.toFixed(0) + '°</span></div>' +
+            '<div class="pm-legend-item"><span class="pm-legend-color" style="background:rgba(255,165,0,0.8);"></span><span>Var: ±' + vari.toFixed(0) + '°</span></div>';
+        } else {
         // Standardní čárové a schodovité grafy čidel
         const { min, max } = computeMinMax(points);
         const sState = hass.states[entityId];
