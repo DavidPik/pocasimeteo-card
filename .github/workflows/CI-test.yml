@@ -22,6 +22,42 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Diagnose braces balance and show context
+        run: |
+          python3 - <<'PY'
+import sys
+p='src/pocasimeteo-card.js'
+s=open(p,'r',encoding='utf-8').read()
+open_count=0
+line=1
+first_negative=None
+first_positive_end=None
+for i,ch in enumerate(s):
+    if ch=='\n':
+        line+=1
+    if ch=='{':
+        open_count+=1
+    if ch=='}':
+        open_count-=1
+    # první místo, kde máme přebytek zavírek
+    if open_count<0 and first_negative is None:
+        first_negative=(line,i)
+    # první místo, kde se balance vrátí na 0 (může indikovat uzavření třídy)
+    if open_count==0 and first_positive_end is None:
+        first_positive_end=line
+print("First negative (too many }) at:", first_negative)
+print("First line where open_count returned to 0:", first_positive_end)
+print("Final open_count:", open_count)
+# vytiskneme okolí řádku, kde se balance vrátil na 0 (pokud existuje)
+if first_positive_end:
+    start=max(1, first_positive_end-8)
+    end=first_positive_end+8
+    print("\\nContext around line", first_positive_end, " (lines", start, "-", end, "):\\n")
+    for n,l in enumerate(open(p).read().splitlines(), start=1):
+        if n>=start and n<=end:
+            print(f"{n:4}: {l}")
+PY
+
       - name: Syntax check (node --check)
         run: node --check src/pocasimeteo-card.js
 
