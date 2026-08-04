@@ -499,7 +499,7 @@ class PocasiMeteoCard extends HTMLElement {
     this._updateCharts(hass, entity).finally(() => { 
       this._rendering = false; 
     });
- 
+  }
   /**
    * Vykreslí základní HTML kostru a aplikuje CSS styly.
    * Struktura generované HTML stránky zůstala přesně zachována dle vašeho návrhu.
