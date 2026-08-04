@@ -550,17 +550,18 @@ class PocasiMeteoCard extends HTMLElement {
   }
 
   /**
-   * ARCHITEKTURA FRONTENDU: Bezpečně aktualizuje texty a mřížku v záhlaví karty.
-   * Tento zápis nepoužívá zanořené HTML značky v proměnných, což garantuje
-   * stoprocentní stabilitu při kompilaci a vykreslování v Lovelace.
+   * ARCHITEKTURA FRONTENDU: Bezpečně aktualizuje texty v záhlaví karty.
+   * Zachovává původní strukturu ID prvků (header-details), čímž plně vyhovuje
+   * vnitřnímu Lovelace enginu a předchází chybě nastavení panelu.
    */
   _updateVisualHeader(entity) {
     const d = entity.attributes;
     const headerTitle = this.shadowRoot.getElementById('header-title');
+    const headerTimestamp = this.shadowRoot.getElementById('header-timestamp');
     const headerMain = this.shadowRoot.getElementById('header-main');
-    const headerGrid = this.shadowRoot.getElementById('header-grid');
+    const headerDetails = this.shadowRoot.getElementById('header-details');
 
-    // Překladový slovník stavů do češtiny
+    // Slovník pro srozumitelné české popisky stavů počasí
     const conditionTranslations = {
       'sunny': 'Slunečno',
       'clear-night': 'Jasno',
@@ -581,48 +582,43 @@ class PocasiMeteoCard extends HTMLElement {
     const rawState = entity.state;
     const stateText = conditionTranslations[rawState] || rawState; 
     const lokalita = d.lokalita_stanice || d.friendly_name || 'Meteostanice';
-    const cas = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
 
-    // 1. KROK: Vyplnění textů na levé straně záhlaví
+    // 1. Vyplnění horního řádku (Název a čas aktualizace z API)
     headerTitle.textContent = lokalita + ' — ' + stateText;
+    headerTimestamp.textContent = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
     
+    // 2. Vyplnění dominantní teploty
     const temp = entity.attributes.temperature !== undefined ? entity.attributes.temperature : '--';
-    headerMain.textContent = temp + ' °C (Aktualizováno: ' + cas + ')';
+    headerMain.textContent = temp + ' °C';
 
-    // 2. KROK: Načtení veličin pro pravou stranu záhlaví
+    // 3. Načtení veličin pro detaily (Tlak, Vlhkost, Síla větru, Srážky)
     const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
     const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
     
+    // Zpracování rychlosti větru a nárazů podle vašeho pokynu
     const windSpeedRaw = entity.attributes.wind_speed;
     const windSpeed = windSpeedRaw !== undefined && windSpeedRaw !== null ? windSpeedRaw : '--';
     
     const gustRaw = entity.attributes.wind_gust;
     const windGust = gustRaw !== undefined && gustRaw !== null ? gustRaw : '--';
     
+    // Přepočet stupňů na textový směr (např. SSE) pomocí degToDirection
     const bearingRaw = entity.attributes.wind_bearing;
     let windDirectionText = '';
     if (bearingRaw !== undefined && bearingRaw !== null) {
       windDirectionText = ' ' + degToDirection(bearingRaw);
     }
     
-    // Spojení rychlosti, nárazů a textového směru: např. "1.6 / 3.5 m/s SSE"
+    // Zabalení do srozumitelného formátu: "Síla větru: rychlost / nárazy m/s SMĚR"
     const komplektniVitrText = windSpeed + ' / ' + windGust + ' m/s' + windDirectionText;
     const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
 
-    // 3. KROK: Čisté naplnění čtyř boxů v mřížce (bez zalamování řetězců)
-    headerGrid.innerHTML = 
-      '<div class="pm-grid-cell">' +
-        '<div class="pm-cell-data"><span class="pm-cell-label">Tlak vzduchu</span><span class="pm-cell-value">' + pressure + ' hPa</span></div>' +
-      '</div>' +
-      '<div class="pm-grid-cell">' +
-        '<div class="pm-cell-data"><span class="pm-cell-label">Vlhkost</span><span class="pm-cell-value">' + humidity + ' %</span></div>' +
-      '</div>' +
-      '<div class="pm-grid-cell" style="grid-column: span 2;">' +
-        '<div class="pm-cell-data"><span class="pm-cell-label">Síla větru (rychlost / nárazy)</span><span class="pm-cell-value">' + komplektniVitrText + '</span></div>' +
-      '</div>' +
-      '<div class="pm-grid-cell" style="grid-column: span 2;">' +
-        '<div class="pm-cell-data"><span class="pm-cell-label">Srážky dnes</span><span class="pm-cell-value">' + srazkyDen + ' mm</span></div>' +
-      '</div>';
+    // 4. Vyplnění detailů v původní struktuře, která zaručuje 100% stabilitu panelu
+    headerDetails.innerHTML = 
+      '<div>Tlak vzduchu: ' + pressure + ' hPa</div>' +
+      '<div>Vlhkost: ' + humidity + ' %</div>' +
+      '<div>Síla větru: ' + komplektniVitrText + '</div>' +
+      '<div>Srážky dnes: ' + srazkyDen + ' mm</div>';
   }
 
   /**
