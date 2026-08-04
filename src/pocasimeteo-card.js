@@ -265,7 +265,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         const { cx, cy, R } = computeChartGeometry(chart.chartArea);
         const dx = chart.$mouse.x - cx;
         const dy = chart.$mouse.y - cy;
-        const dist = Math.sqrt(dx * dx + dx * dy);
+        const dist = Math.sqrt(dx * dx + dy * dy); // DPI: Řádek končil dx * dy
 
         if (dist > R) {
           chart.$windHover = null;
@@ -505,43 +505,45 @@ class PocasiMeteoCard extends HTMLElement {
    * Struktura generované HTML stránky zůstala přesně zachována dle vašeho návrhu.
    */
   _initialize() {
-    this.shadowRoot.innerHTML = '<style>' +
-        '.pm-card { padding:0; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:0; }' +
-        '.pm-header-section { padding:16px; background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; gap:12px; }' +
-        '.pm-header-top { display:flex; justify-content:space-between; align-items:flex-start; font-size:20px; font-weight:600; }' +
-        '.pm-header-title { display:flex; flex-direction:column; gap:4px; }' +
-        '.pm-header-timestamp { opacity:0.7; font-size:14px; }' +
-        '.pm-header-bottom { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }' +
-        '.pm-header-main { font-size:48px; font-weight:300; }' +
-        '.pm-header-details { display:flex; flex-direction:column; gap:4px; font-size:16px; opacity:0.85; }' +
-        '.pm-primary-section { background:rgba(255,255,255,0.03); padding:16px; border-bottom:1px solid rgba(255,255,255,0.1); }' +
-        '.pm-secondary-section { background:rgba(255,255,255,0.05); padding:16px; }' +
-        '.pm-graphs { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; margin-top:8px; }' +
-        '.pm-graph-tile { background:var(--ha-card-background,#1c1c1c); border-radius:12px; padding:4px; box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display:flex; flex-direction:column; }' +
-        '.pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; padding: 4px; }' +
-        '.pm-graph { width:100%; height:220px; }' +
-        '.pm-legend { margin-top:0px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:14px; opacity:0.8; padding: 4px; }' +
-        '.pm-legend-item { display:flex; align-items:center; gap:4px; }' +
-        '.pm-legend-color { width:12px; height:12px; border-radius:2px; }' +
-      '</style>' +
-      '<ha-card class="pm-card">' +
-        '<div id="header-section" class="pm-header-section">' +
-          '<div class="pm-header-top">' +
-            '<div class="pm-header-title" id="header-title"></div>' +
-            '<div class="pm-header-timestamp" id="header-timestamp"></div>' +
-          '</div>' +
-          '<div class="pm-header-bottom">' +
-            '<div class="pm-header-main" id="header-main"></div>' +
-            '<div class="pm-header-details" id="header-details"></div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="pm-primary-section">' +
-          '<div id="primary-graphs" class="pm-graphs"></div>' +
-        '</div>' +
-        '<div class="pm-secondary-section">' +
-          '<div id="secondary-graphs" class="pm-graphs"></div>' +
-        '</div>' +
-      '</ha-card>';
+    this.shadowRoot.innerHTML = `
+      <style>
+        .pm-card { padding:0; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:0; }
+        .pm-header-section { padding:16px; background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; gap:12px; }
+        .pm-header-top { display:flex; justify-content:space-between; align-items:flex-start; font-size:20px; font-weight:600; }
+        .pm-header-title { display:flex; flex-direction:column; gap:4px; }
+        .pm-header-timestamp { opacity:0.7; font-size:14px; }
+        .pm-header-bottom { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+        .pm-header-main { font-size:48px; font-weight:300; }
+        .pm-header-details { display:flex; flex-direction:column; gap:4px; font-size:16px; opacity:0.85; }
+        .pm-primary-section { background:rgba(255,255,255,0.03); padding:16px; border-bottom:1px solid rgba(255,255,255,0.1); }
+        .pm-secondary-section { background:rgba(255,255,255,0.05); padding:16px; }
+        .pm-graphs { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; margin-top:8px; }
+        .pm-graph-tile { background:var(--ha-card-background,#1c1c1c); border-radius:12px; padding:4px; box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display:flex; flex-direction:column; }
+        .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; padding: 4px; }
+        .pm-graph { width:100%; height:220px; }
+        .pm-legend { margin-top:0px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:14px; opacity:0.8; padding: 4px; }
+        .pm-legend-item { display:flex; align-items:center; gap:4px; }
+        .pm-legend-color { width:12px; height:12px; border-radius:2px; }
+      </style>
+      <ha-card class="pm-card">
+        <div id="header-section" class="pm-header-section">
+          <div class="pm-header-top">
+            <div class="pm-header-title" id="header-title"></div>
+            <div class="pm-header-timestamp" id="header-timestamp"></div>
+          </div>
+          <div class="pm-header-bottom">
+            <div class="pm-header-main" id="header-main"></div>
+            <div class="pm-header-details" id="header-details"></div>
+          </div>
+        </div>
+        <div class="pm-primary-section">
+          <div id="primary-graphs" class="pm-graphs"></div>
+        </div>
+        <div class="pm-secondary-section">
+          <div id="secondary-graphs" class="pm-graphs"></div>
+        </div>
+      </ha-card>
+    `;
   }
 
   /**
