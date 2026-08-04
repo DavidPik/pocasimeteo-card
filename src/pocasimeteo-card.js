@@ -477,9 +477,10 @@ class PocasiMeteoCard extends HTMLElement {
     const primaryGraphs = this.shadowRoot.getElementById('primary-graphs');
     const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
 
-    headerTitle.innerHTML += `<div style="font-size:16px; opacity:0.8;">${entity.state}</div>`;
+    headerTitle.innerHTML = `${d.lokalita_stanice || d.station_name || ''}<div style="font-size:16px; opacity:0.8;">${entity.state}</div>`;
     headerTimestamp.innerHTML = d.timestamp || '';
     headerMain.innerHTML = `${entity.attributes.temperature} ${entity.attributes.temperature_unit}`;
+
 
     headerDetails.innerHTML = `<div>Tlak: ${entity.attributes.pressure} ${entity.attributes.pressure_unit}</div>` +
       `<div>Vlhkost: ${entity.attributes.humidity}%</div>` +
