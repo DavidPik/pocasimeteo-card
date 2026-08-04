@@ -696,10 +696,6 @@ class PocasiMeteoCard extends HTMLElement {
       if (points.length === 1) {
         points.push({ x: Date.now(), y: points[0].y });
       }
-      const points = historyToPoints(history[entityId][0]);
-      if (points.length === 1) {
-        points.push({ x: Date.now(), y: points[0].y });
-      }
       
       // Pokračujeme pouze pokud máme v poli 2 nebo více bodů
       if (points.length > 1) {
