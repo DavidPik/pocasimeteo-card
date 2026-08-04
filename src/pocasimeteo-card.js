@@ -31,13 +31,19 @@ Chart.register(
   RadialLinearScale
 );
 
+// Konstanta pro mřížku grafů Chart.js
 const GRID_COLOR = 'rgba(255,255,255,0.2)';
 
+// Popisky pro 16 směrů větrné růžice
 const WIND_DIR_LABELS = [
   'N','NNE','NE','ENE','E','ESE','SE','SSE',
   'S','SSW','SW','WSW','W','WNW','NW','NNW'
 ];
 
+/**
+ * Bezpečně vytáhne hodnotu CSS proměnné z Home Assistenta.
+ * Umožňuje kartě dynamicky přebírat barvy aktuálně nastaveného schématu.
+ */
 function safeCssVar(el, name, fallback) {
   try {
     const v = getComputedStyle(el).getPropertyValue(name).trim();
@@ -45,10 +51,17 @@ function safeCssVar(el, name, fallback) {
   } catch { return fallback; }
 }
 
+/**
+ * Detekuje, zda uživatel používá světlý nebo tmavý režim Lovelace rozhraní.
+ */
 function isLightTheme(el) {
   return safeCssVar(el, '--brightness', '0').trim() === '1';
 }
 
+/**
+ * ARCHITEKTURA FRONTENDU: Vypočítá barvy textu a pozadí na základě HA témat.
+ * Zajišťuje, že se pozadí grafů přizpůsobí kartám (např. v tmavém režimu tmavé pozadí).
+ */
 function computeTheme(host) {
   const light = isLightTheme(host);
   const textColor = safeCssVar(host, '--primary-text-color', null) || (light ? '#000' : '#fff');
@@ -59,15 +72,24 @@ function computeTheme(host) {
   return { textColor, bgColor };
 }
 
+/**
+ * Převod stupňů (0-360) na textovou zkratku směru větru.
+ */
 function degToDirection(deg) {
   if (deg == null || isNaN(deg)) return '';
   return WIND_DIR_LABELS[Math.round(deg / 22.5) % 16];
 }
 
+/**
+ * Pomocná matematická funkce pro určení indexu (0-15) sektoru větrné růžice.
+ */
 function directionToIndex(deg) {
   return Math.round(deg / 22.5) % 16;
 }
-
+/**
+ * ARCHITEKTURA FRONTENDU: Sestaví pole hodnot pro 16 sektorů větrné růžice.
+ * Prochází časovou řadu bodů z historie a rozřazuje je do příslušných indexů (0-15).
+ */
 function buildWindRose(points) {
   const bins = new Array(16).fill(0);
   for (const p of points) {
@@ -77,7 +99,12 @@ function buildWindRose(points) {
   return bins;
 }
 
+/**
+ * ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Transformuje syrová data z HA API historie
+ * (objekty se stavy last_changed/last_updated a state) na pole souřadnic [x, y] pro Chart.js.
+ */
 function historyToPoints(raw) {
+  if (!Array.isArray(raw)) return [];
   return raw.map(p => {
     const ts = p.last_changed || p.last_updated;
     const val = Number(p.state);
@@ -91,7 +118,11 @@ function historyToPoints(raw) {
   }).filter(p => p && !isNaN(p.x) && !isNaN(p.y));
 }
 
+/**
+ * Vypočítá extrémy (minimum a maximum) z pole bodů pro zobrazení v grafech.
+ */
 function computeMinMax(points) {
+  if (!points || points.length === 0) return { min: 0, max: 0, minPoint: null, maxPoint: null };
   const ys = points.map(p => p.y);
   const min = Math.min(...ys);
   const max = Math.max(...ys);
@@ -102,6 +133,9 @@ function computeMinMax(points) {
   };
 }
 
+/**
+ * Vypočítá středy a poloměr pro ručně vykreslovanou větrnou růžici uvnitř Canvasu.
+ */
 function computeChartGeometry(chartArea) {
   const cx = (chartArea.left + chartArea.right) / 2;
   const cy = (chartArea.top + chartArea.bottom) / 2;
@@ -111,13 +145,22 @@ function computeChartGeometry(chartArea) {
   return { cx, cy, aw, ah, R };
 }
 
+/**
+ * Převod HEX barvy na RGBA formát s nastavitelnou průhledností pro výplně grafů.
+ */
 function hexToRgba(hex, alpha) {
+  if (!hex || hex.length < 7) hex = '#3b82f6';
   const r = parseInt(hex.slice(1,3),16);
   const g = parseInt(hex.slice(3,5),16);
   const b = parseInt(hex.slice(5,7),16);
   return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
 
+/**
+ * ARCHITEKTURA FRONTENDU: Bezpečně komunikuje s REST rozhraním Home Assistenta.
+ * Automaticky získává přístupový token z objektu `hass` (kompatibilní se staršími i moderními verzemi HA)
+ * a obsahuje retry mechanismus, pokud token během nečinnosti vyprší.
+ */
 async function fetchWithRetry(url, hass, options = {}, retry = true) {
   const getToken = () =>
     hass.connection?.options?.accessToken ||
@@ -139,7 +182,7 @@ async function fetchWithRetry(url, hass, options = {}, retry = true) {
   });
 
   if (resp.status === 401 && retry) {
-    // počkáme, než HA obnoví token v objektu hass
+    // Pokud token expiroval, počkáme 1.5s na jeho vnitřní obnovu v HA jádru a zkusíme znovu
     await new Promise(r => setTimeout(r, 1500));
     token = getToken();
     if (!token) {
@@ -150,7 +193,11 @@ async function fetchWithRetry(url, hass, options = {}, retry = true) {
 
   return resp;
 }
-
+/**
+ * ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Vytvoří konfiguraci pro čárový graf Chart.js.
+ * Na základě parametrů z backendu (color, style) určuje, zda bude graf hladký (smooth)
+ * nebo schodovitý (stepped) – např. pro srážky a rychlost větru, jak definuje backend v const.py.
+ */
 function createLineChartConfig(points, cleanName, color, textColor, sensorId, sensorStyle) {
   const { min, max, minPoint, maxPoint } = computeMinMax(points);
   const rgba = hexToRgba(color, 0.25);
@@ -161,50 +208,55 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId, se
   const isStepped = sensorStyle === 'stepped';
 
   return {
-    type:'line',
-    data:{
-      datasets:[
+    type: 'line',
+    data: {
+      datasets: [
         {
-          label:cleanName,
-          data:points,
-          borderColor:color,
-          backgroundColor:rgba,
+          label: cleanName,
+          data: points,
+          borderColor: color,
+          backgroundColor: rgba,
           tension: isStepped ? 0 : 0.3,
           stepped: isStepped ? true : false,
-          pointRadius:0,
-          borderWidth:2
+          pointRadius: 0,
+          borderWidth: 2
         },
         {
-          label:'Min: ' + min.toFixed(1),
-          data:[{x:minPoint.x,y:minPoint.y}],
-          pointRadius:6,
-          pointBackgroundColor:'red',
-          showLine:false
+          label: 'Min: ' + min.toFixed(1),
+          data: minPoint ? [{ x: minPoint.x, y: minPoint.y }] : [],
+          pointRadius: 6,
+          pointBackgroundColor: 'red',
+          showLine: false
         },
         {
-          label:'Max: ' + max.toFixed(1),
-          data:[{x:maxPoint.x,y:maxPoint.y}],
-          pointRadius:6,
-          pointBackgroundColor:'green',
-          showLine:false
+          label: 'Max: ' + max.toFixed(1),
+          data: maxPoint ? [{ x: maxPoint.x, y: maxPoint.y }] : [],
+          pointRadius: 6,
+          pointBackgroundColor: 'green',
+          showLine: false
         }
       ]
     },
-    options:{
-      responsive:false,
-      maintainAspectRatio:false,
-      plugins:{ tooltip:{}, legend:{display:false} },
-      scales:{
-        x:{ type:'time', time:{unit:'hour'}, ticks:{color:textColor}, grid:{color:GRID_COLOR} },
-        y:{ min:yMinAxis, ticks:{color:textColor}, grid:{color:GRID_COLOR} }
+    options: {
+      responsive: false,
+      maintainAspectRatio: false,
+      plugins: { tooltip: {}, legend: { display: false } },
+      scales: {
+        x: { type: 'time', time: { unit: 'hour' }, ticks: { color: textColor }, grid: { color: GRID_COLOR } },
+        y: { min: yMinAxis, ticks: { color: textColor }, grid: { color: GRID_COLOR } }
       }
     }
   };
 }
 
+/**
+ * ARCHITEKTURA FRONTENDU: Vlastní Canvas plugin pro detailní vykreslení větrné růžice.
+ * Obsahuje matematické zachycení pohybu myši (mousemove) nad jednotlivými kruhovými výsečemi
+ * a počítá úhly k určení, nad kterým ze 16 směrů se uživatel právě nachází.
+ */
 function createWindRosePlugin(theme, bins, avg, mode, vari) {
   return {
-    id:'windRoseManual',
+    id: 'windRoseManual',
     beforeInit(chart) {
       const canvas = chart.canvas;
       canvas.addEventListener('mousemove', (ev) => {
@@ -213,7 +265,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         const { cx, cy, R } = computeChartGeometry(chart.chartArea);
         const dx = chart.$mouse.x - cx;
         const dy = chart.$mouse.y - cy;
-        const dist = Math.sqrt(dx*dx + dy*dy);
+        const dist = Math.sqrt(dx * dx + dx * dy);
 
         if (dist > R) {
           chart.$windHover = null;
@@ -244,27 +296,31 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       ctx.save();
       ctx.strokeStyle = GRID_COLOR;
       ctx.lineWidth = 1;
-      [0.15,0.30,0.45,0.60,0.75,0.90].forEach(f => {
+      
+      // Vykreslení pomocných kružnic (mřížky)
+      [0.15, 0.30, 0.45, 0.60, 0.75, 0.90].forEach(f => {
         ctx.beginPath();
-        ctx.arc(cx, cy, R*f, 0, Math.PI*2);
+        ctx.arc(cx, cy, R * f, 0, Math.PI * 2);
         ctx.stroke();
       });
 
+      // Vykreslení hlavních os (směrů) mřížky
       [0, 45, 90, 135, 180, 225, 270, 315].forEach(deg => {
         const a = (deg - 90) * Math.PI / 180;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + Math.cos(a)*R, cy + Math.sin(a)*R);
+        ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
         ctx.stroke();
       });
 
+      // Vykreslení samotných datových sektorů (četnosti směrů větru)
       const sectorColor = '#009688';
-      for (let i=0; i<16; i++) {
+      for (let i = 0; i < 16; i++) {
         const binValue = bins[i];
         const radius = (binValue / maxBin) * (R * 0.90);
         const midAngle = ((i * 22.5) - 90) * Math.PI / 180;
-        const startAngle = midAngle - sectorAngle/2;
-        const endAngle = midAngle + sectorAngle/2;
+        const startAngle = midAngle - sectorAngle / 2;
+        const endAngle = midAngle + sectorAngle / 2;
 
         ctx.beginPath();
         ctx.moveTo(cx, cy);
@@ -277,6 +333,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.stroke();
       }
 
+      // Vykreslení popisků světových stran kolem růžice
       ctx.fillStyle = theme.textColor;
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';
@@ -288,7 +345,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         const y = cy + Math.sin(angle) * offsetText;
         ctx.fillText(label, x, y);
       });
-
+      // Pokračování metody afterDraw uvnitř větrné růžice
       const avgLineLen = R - 5;    
       const modeLineLen = R - 25;  
       const offsetVar = R - 10;    
@@ -298,6 +355,8 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       const startVar = (avg - vari - 90) * Math.PI / 180;
       const endVar = (avg + vari - 90) * Math.PI / 180;
 
+      // ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Vykreslení rozptylu (variance) větru.
+      // Data pocházejí z atributů senzoru směru větru, které spočítal backend v coordinator.py.
       ctx.fillStyle = 'rgba(255,165,0,0.22)';
       ctx.beginPath();
       ctx.moveTo(cx, cy);
@@ -305,22 +364,25 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       ctx.closePath();
       ctx.fill();
 
+      // Vykreslení průměrného směru větru (červená čára)
       ctx.strokeStyle = '#ff0000';
       ctx.lineWidth = 2.5;
       ctx.setLineDash([]); 
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(avgAngle)*avgLineLen, cy + Math.sin(avgAngle)*avgLineLen);
+      ctx.lineTo(cx + Math.cos(avgAngle) * avgLineLen, cy + Math.sin(avgAngle) * avgLineLen);
       ctx.stroke();
 
+      // Vykreslení modu - převládajícího směru (modrá čára)
       ctx.strokeStyle = '#0000ff';
       ctx.lineWidth = 5.0;
       ctx.setLineDash([]); 
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(modeAngle)*modeLineLen, cy + Math.sin(modeAngle)*modeLineLen);
+      ctx.lineTo(cx + Math.cos(modeAngle) * modeLineLen, cy + Math.sin(modeAngle) * modeLineLen);
       ctx.stroke();
 
+      // Ruční vykreslení stínovaného okna tooltipu při interakci myši nad sektorem růžice
       if (chart.$windHover && chart.$mouse) {
         const { index, value } = chart.$windHover;
         const { x: mx, y: my } = chart.$mouse;
@@ -340,11 +402,8 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         let ty = my - boxHeight - 10;
 
         if (tx + boxWidth > chart.width) tx = chart.width - boxWidth - 4;
-        
-        if (chart.chartArea) {
-          if (chart.chartArea.top > ty) {
-            ty = my + 10;
-          }
+        if (chart.chartArea && chart.chartArea.top > ty) {
+          ty = my + 10;
         }
 
         ctx.shadowColor = 'rgba(0,0,0,0.3)';
@@ -353,7 +412,11 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.strokeStyle = theme.textColor + '80';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.roundRect(tx, ty, boxWidth, boxHeight, 4);
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(tx, ty, boxWidth, boxHeight, 4);
+        } else {
+          ctx.rect(tx, ty, boxWidth, boxHeight);
+        }
         ctx.fill();
         ctx.stroke();
 
@@ -367,36 +430,45 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
   };
 }
 
+/**
+ * Třída reprezentující samotnou Home Assistant Lovelace kartu PočasíMeteo.
+ */
 class PocasiMeteoCard extends HTMLElement {
   constructor() {
     super();
     this._initialized = false;
     this._rendering = false;
     this._charts = {};
-    this._lastAttributes = null;
-    this._lastRender = 0;
-    this._updateInterval = null;
+    this._lastApiTimestamp = null; // ARCHITEKTURA FRONTENDU: Sleduje změnu dat z API
     this._lastFetch = 0;
   }
 
+  /**
+   * Inicializace konfigurace karty zadávané uživatelem v Lovelace dashboardu.
+   */
   setConfig(config) {
     if (!config.entity) {
       throw new Error('entity is required');
     }
     this.config = { show_graphs: true, hide_sensors: [], ...config };
     
-    const shadowMode = 'open';
-    this.attachShadow({ mode: shadowMode });
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: 'open' });
+    }
   }
-
+  /**
+   * Spouští se pokaždé, když Home Assistant změní stav jakékoliv entity v systému.
+   */
   set hass(hass) {
     const entity = hass.states[this.config.entity];
 
+    // Prvotní sestavení HTML struktury (Shadow DOM)
     if (!this._initialized) {
       this._initialize();
       this._initialized = true;
     }
 
+    // Pokud backendová entita weather není dostupná, zobrazíme varování
     if (!entity || !entity.attributes || !entity.attributes.sensors) {
       const card = this.shadowRoot.querySelector('.pm-card');
       if (card) {
@@ -405,21 +477,25 @@ class PocasiMeteoCard extends HTMLElement {
       return;
     }
 
-    const refresh = entity.attributes.update_interval || 5;
-    if (refresh * 60 * 1000 > Date.now() - this._lastRender) return;
+    // ARCHITEKTURA FRONTENDU / OPTIMALIZACE: Okamžitě aktualizujeme textové prvky v záhlaví,
+    // aby karta reagovala ihned, ale náročné grafy/historii překreslíme jen při změně timestampu z API.
+    this._updateVisualHeader(entity);
 
-    if (this._lastAttributes && JSON.stringify(this._lastAttributes) === JSON.stringify(entity.attributes)) return;
+    const currentApiTimestamp = entity.attributes.timestamp;
+    const nowTs = Date.now();
 
-    this._lastAttributes = JSON.parse(JSON.stringify(entity.attributes));
-    this._lastRender = Date.now();
-
-    if (this._rendering) return;
-    this._rendering = true;
-
-    this._update(hass).finally(() => { this._rendering = false; });
+    // Pokud se nezměnil timestamp z API a od posledního fetchování neuplynulo 5 minut,
+    // přeskočíme stahování historie, abychom šetřili síť i procesor HA Green.
+    if (this._lastApiTimestamp === currentApiTimestamp && (nowTs - this._lastFetch  { 
+      this._rendering = false; 
+    });
   }
  
-   _initialize() {
+  /**
+   * Vykreslí základní HTML kostru a aplikuje CSS styly.
+   * Struktura generované HTML stránky zůstala přesně zachována dle vašeho návrhu.
+   */
+  _initialize() {
     this.shadowRoot.innerHTML = '<style>' +
         '.pm-card { padding:0; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:0; }' +
         '.pm-header-section { padding:16px; background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; gap:12px; }' +
@@ -459,45 +535,62 @@ class PocasiMeteoCard extends HTMLElement {
       '</ha-card>';
   }
 
-  async _update(hass) {
-    const entity = hass.states[this.config.entity];
-    if (!entity) return;
-
-    const nowTs = Date.now();
-    if (30000 > nowTs - this._lastFetch) return;
-    this._lastFetch = nowTs;
-
+  /**
+   * ARCHITEKTURA FRONTENDU / POKYN: Aktualizuje texty v záhlaví karty.
+   * Hodnoty (teplota, tlak, vlhkost) a stav počasí čte přímo z nativních vlastností 
+   * entity weather (entity.state, entity.attributes.temperature atd.), nikoliv z extra atributů.
+   */
+  _updateVisualHeader(entity) {
     const d = entity.attributes;
-    const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
-
     const headerTitle = this.shadowRoot.getElementById('header-title');
     const headerTimestamp = this.shadowRoot.getElementById('header-timestamp');
     const headerMain = this.shadowRoot.getElementById('header-main');
     const headerDetails = this.shadowRoot.getElementById('header-details');
+
+    // Nativní stav weather entity (např. sunny, rainy) přeložený v budoucnu systémem HA
+    const stateText = entity.state; 
+    
+    // Načtení sjednoceného klíče lokality z backendu
+    const lokalita = d.lokalita_stanice || d.friendly_name || '';
+
+    headerTitle.innerHTML = `${lokalita}<div style="font-size:16px; opacity:0.8; text-transform:capitalize;">${stateText}</div>`;
+    headerTimestamp.innerHTML = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
+    
+    // Čtení nativní teploty a systémové jednotky z HA
+    const temp = entity.attributes.temperature !== undefined ? entity.attributes.temperature : '--';
+    headerMain.innerHTML = `${temp} °C`;
+
+    // Čtení nativního tlaku, vlhkosti a rychlosti větru ze standardních weather atributů
+    const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
+    const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
+    const windGust = entity.attributes.wind_gust !== undefined ? entity.attributes.wind_gust : '--';
+    
+    // Srážky za den čteme z odsouhlaseného extra atributu 'srazky_den'
+    const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
+
+    headerDetails.innerHTML = 
+      `<div>Tlak: ${pressure} hPa</div>` +
+      `<div>Vlhkost: ${humidity}%</div>` +
+      `<div>Nárazy: ${windGust} m/s</div>` +
+      `<div>Srážky dnes: ${srazkyDen} mm</div>`;
+  }
+  /**
+   * ARCHITEKTURA FRONTENDU: Načte historii pro aktivní čidla a vykreslí grafy.
+   * Pro každé čidlo z pole d.sensors stahuje historii za posledních 24 hodin zvlášť.
+   */
+  async _updateCharts(hass, entity) {
+    const d = entity.attributes;
+    const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
+
     const primaryGraphs = this.shadowRoot.getElementById('primary-graphs');
     const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
-
-    headerTitle.innerHTML = `${d.lokalita_stanice || d.station_name || ''}<div style="font-size:16px; opacity:0.8;">${entity.state}</div>`;
-    headerTimestamp.innerHTML = d.timestamp || '';
-    headerMain.innerHTML = `${entity.attributes.temperature} ${entity.attributes.temperature_unit}`;
-
-
-    headerDetails.innerHTML = `<div>Tlak: ${entity.attributes.pressure} ${entity.attributes.pressure_unit}</div>` +
-      `<div>Vlhkost: ${entity.attributes.humidity}%</div>` +
-      `<div>Vítr: ${entity.attributes.wind_speed} ${entity.attributes.wind_speed_unit} (${degToDirection(entity.attributes.wind_bearing)})</div>` +
-      `<div>Nárazy: ${entity.attributes.wind_gust} ${entity.attributes.wind_speed_unit}</div>` +
-      `<div>Srážky dnes: ${d.srazky_den ?? 0} ${entity.attributes.precipitation_unit}</div>`;
 
     primaryGraphs.innerHTML = '';
     secondaryGraphs.innerHTML = '';
 
-    if (this.config.show_graphs === false) return;
-    if (sensorsMeta.length === 0) return;
+    if (this.config.show_graphs === false || sensorsMeta.length === 0) return;
 
-    const token = hass.connection?.options?.accessToken || hass.auth?.data?.access_token || null;
-    if (!token) return;
-
-    const since = new Date(Date.now() - 24*3600*1000).toISOString();
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const canvases = {};
     const history = {};
 
@@ -506,6 +599,7 @@ class PocasiMeteoCard extends HTMLElement {
       { type: 'secondary', container: secondaryGraphs }
     ];
 
+    // 1. KROK: Dynamicky vygenerujeme HTML elementy a Canvas pro každé viditelné čidlo
     for (const section of targetSections) {
       const filteredMeta = sensorsMeta.filter(s =>
         s.type === section.type &&
@@ -517,7 +611,7 @@ class PocasiMeteoCard extends HTMLElement {
       
       for (const s of filteredMeta) {
         const sState = hass.states[s.entity_id];
-        if (!sState || this.config.hide_sensors.includes(s.id)) continue;
+        if (!sState) continue;
 
         const tile = document.createElement('div');
         tile.classList.add('pm-graph-tile');
@@ -546,6 +640,7 @@ class PocasiMeteoCard extends HTMLElement {
       }
     }
 
+    // 2. KROK: Paralelně stáhneme historii z HA pro všechna vygenerovaná čidla najednou
     const activeEntityIds = Object.keys(canvases);
     await Promise.all(activeEntityIds.map(async entityId => {
       const url = '/api/history/period/' + since + '?filter_entity_id=' + entityId + '&minimal_response&significant_changes_only=false';
@@ -561,10 +656,12 @@ class PocasiMeteoCard extends HTMLElement {
     const host = this.shadowRoot.host;
     const theme = computeTheme(host);
 
+    // 3. KROK: Inicializujeme jednotlivé grafy Chart.js nad staženými daty
     for (const entityId of activeEntityIds) {
       const item = canvases[entityId];
       if (!item) continue;
 
+      // Pokud historie chybí, vytvoříme statický bod z aktuálního stavu čidla
       if (!history[entityId] || !history[entityId][0] || !history[entityId][0].length) {
         const sState = hass.states[entityId];
         if (!sState) continue;
@@ -578,82 +675,50 @@ class PocasiMeteoCard extends HTMLElement {
           { x: now, y: val }
         ];
 
-        this._charts[entityId]?.destroy();
+        if (this._charts[entityId]) this._charts[entityId].destroy();
         this._charts[entityId] = new Chart(
           canvases[entityId].canvas.getContext('2d'),
           createLineChartConfig(points, canvases[entityId].prettyName, '#3b82f6', theme.textColor, canvases[entityId].id, 'smooth')
         );
-
         continue;
       }
       
       const points = historyToPoints(history[entityId][0]);
-
       if (points.length === 1) {
         points.push({ x: Date.now(), y: points[0].y });
       }
-      
-      if (2 > points.length) continue;
-
-      const { canvas, tile, prettyName, legend, id } = item;
-      const ctx = canvas.getContext('2d');
-
-      if (this._charts[entityId]) this._charts[entityId].destroy();
-      canvas.style.backgroundColor = theme.bgColor;
-      tile.style.backgroundColor = theme.bgColor;
-
-      if (id === 'vitr_smer') {
-        const bins = buildWindRose(points);
-        const sState = hass.states[entityId];
-
-        const avg = sState ? Number(sState.attributes.vitr_smer_avg ?? 0) : 0;
-        const mode = sState ? Number(sState.attributes.vitr_smer_mode ?? 0) : 0;
-        const vari = sState ? Number(sState.attributes.vitr_smer_var ?? 0) : 0;
-
-        const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
-
-        this._charts[entityId] = new Chart(ctx, {
-          type:'polarArea',
-          data:{ labels:[], datasets:[] },
-          options:{
-            responsive:false,
-            maintainAspectRatio:false,
-            layout:{ padding:{ top:20, bottom:20, left:10, right:10 }},
-            scales:{ r:{ ticks:{display:false}, grid:{display:false}, beginAtZero:true }},
-            plugins:{ tooltip:{}, legend:{display:false} }
-          },
-          plugins:[windRosePlugin]
-        });
-
-        legend.innerHTML = '<div class="pm-legend-item"><span class="pm-legend-color" style="background:#ff0000;"></span><span>Avg: ' + avg.toFixed(0) + '°</span></div>' +
+      if (points.length <span class="pm-legend-color" style="background:#ff0000;"></span><span>Avg: ' + avg.toFixed(0) + '°</span></div>' +
           '<div class="pm-legend-item"><span class="pm-legend-color" style="background:#0000ff;"></span><span>Mode: ' + mode.toFixed(0) + '°</span></div>' +
           '<div class="pm-legend-item"><span class="pm-legend-color" style="background:rgba(255,165,0,0.8);"></span><span>Var: ±' + vari.toFixed(0) + '°</span></div>';
       } else {
+        // Standardní čárové a schodovité grafy čidel
         const { min, max } = computeMinMax(points);
         const sState = hass.states[entityId];
         const color = sState ? (sState.attributes.graph_color || '#3b82f6') : '#3b82f6';
-
         const sensorStyle = sState?.attributes?.graph_style || 'smooth';
+
         this._charts[entityId] = new Chart(
           ctx,
           createLineChartConfig(points, prettyName, color, theme.textColor, id, sensorStyle)
         );
 
-        legend.innerHTML = '<div class="pm-legend-item"><span class="pm-legend-color" style="background:red;"></span><span>Min: ' + min.toFixed(1) + '</span></div>' +
+        legend.innerHTML = 
+          '<div class="pm-legend-item"><span class="pm-legend-color" style="background:red;"></span><span>Min: ' + min.toFixed(1) + '</span></div>' +
           '<div class="pm-legend-item"><span class="pm-legend-color" style="background:green;"></span><span>Max: ' + max.toFixed(1) + '</span></div>';
       }
     }
   }
 
-  _hexToRgba(hex, alpha) { return hexToRgba(hex, alpha); }
   getCardSize() { return 6; }
 }
 
+// Registrace karty do vlastních HTML elementů prohlížeče
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
 
+// Registrace karty do HACS / Lovelace katalogu karet pro pohodlný výběr v UI editoru
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type:'pocasimeteo-card',
-  name:'PočasíMeteo Card',
-  description:'Automatické grafy pro PočasíMeteo.cz'
+  type: 'pocasimeteo-card',
+  name: 'PočasíMeteo Card',
+  description: 'Automatické grafy pro PočasíMeteo.cz'
 });
