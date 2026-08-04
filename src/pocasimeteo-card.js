@@ -481,6 +481,8 @@ class PocasiMeteoCard extends HTMLElement {
     // aby karta reagovala ihned, ale náročné grafy/historii překreslíme jen při změně timestampu z API.
     this._updateVisualHeader(entity);
 
+    const currentApiTimestamp = entity.attributes.timestamp;
+    const nowTs = Date.now();
     const timeDifference = nowTs - this._lastFetch;
 
     // Pokud se nezměnil timestamp z API a zároveň od posledního načtení neuplynulo 5 minut (300 000 ms), přeskočíme to.
@@ -500,6 +502,7 @@ class PocasiMeteoCard extends HTMLElement {
       this._rendering = false; 
     });
   }
+  
   /**
    * Vykreslí základní HTML kostru a aplikuje CSS styly.
    * Struktura generované HTML stránky zůstala přesně zachována dle vašeho návrhu.
@@ -752,9 +755,10 @@ class PocasiMeteoCard extends HTMLElement {
           '<div class="pm-legend-item"><span class="pm-legend-color" style="background:red;"></span><span>Min: ' + min.toFixed(1) + '</span></div>' +
           '<div class="pm-legend-item"><span class="pm-legend-color" style="background:green;"></span><span>Max: ' + max.toFixed(1) + '</span></div>';
       }
-    }
-  }
-
+    } // Konec podmínky: if (points.length > 1)
+  } // Konec cyklu: for (const entityId of activeEntityIds)
+} // Konec metody: async _updateCharts(hass, entity)
+  
   getCardSize() { return 6; }
 }
 
