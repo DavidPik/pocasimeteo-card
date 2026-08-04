@@ -554,6 +554,10 @@ class PocasiMeteoCard extends HTMLElement {
    * Hodnoty (teplota, tlak, vlhkost) a stav počasí čte přímo z nativních vlastností 
    * entity weather (entity.state, entity.attributes.temperature atd.), nikoliv z extra atributů.
    */
+  /**
+   * ARCHITEKTURA FRONTENDU: Aktualizuje texty v záhlaví karty z nativních vlastností.
+   * Obsahuje vestavěný překlad základních stavů HA do srozumitelné češtiny.
+   */
   _updateVisualHeader(entity) {
     const d = entity.attributes;
     const headerTitle = this.shadowRoot.getElementById('header-title');
@@ -561,25 +565,44 @@ class PocasiMeteoCard extends HTMLElement {
     const headerMain = this.shadowRoot.getElementById('header-main');
     const headerDetails = this.shadowRoot.getElementById('header-details');
 
-    // Nativní stav weather entity (např. sunny, rainy) přeložený v budoucnu systémem HA
-    const stateText = entity.state; 
-    
-    // Načtení sjednoceného klíče lokality z backendu
-    const lokalita = d.lokalita_stanice || d.friendly_name || '';
+    // Slovník pro srozumitelné české popisky stavů počasí
+    const conditionTranslations = {
+      'sunny': 'Slunečno',
+      'clear-night': 'Jasno',
+      'cloudy': 'Oblačno',
+      'fog': 'Mlha',
+      'hail': 'Krupobití',
+      'lightning': 'Bouřka',
+      'lightning-rainy': 'Bouřka s deštěm',
+      'partlycloudy': 'Polojasno',
+      'pouring': 'Silný déšť',
+      'rainy': 'Déšť',
+      'snowy': 'Sněžení',
+      'snowy-rainy': 'Sníh s deštěm',
+      'sunny': 'Slunečno',
+      'windy': 'Větrno',
+      'windy-variant': 'Silný vítr'
+    };
 
-    headerTitle.innerHTML = `${lokalita}<div style="font-size:16px; opacity:0.8; text-transform:capitalize;">${stateText}</div>`;
+    const rawState = entity.state;
+    const stateText = conditionTranslations[rawState] || rawState; 
+    const lokalita = d.lokalita_stanice || d.friendly_name || 'Meteostanice';
+
+    headerTitle.innerHTML = `${lokalita}<div style="font-size:16px; opacity:0.8;">${stateText}</div>`;
     headerTimestamp.innerHTML = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
     
-    // Čtení nativní teploty a systémové jednotky z HA
     const temp = entity.attributes.temperature !== undefined ? entity.attributes.temperature : '--';
     headerMain.innerHTML = `${temp} °C`;
 
-    // Čtení nativního tlaku, vlhkosti a rychlosti větru ze standardních weather atributů
+    // Čtení nativních vlastností weather entity z HA jádra
     const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
     const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
-    const windGust = entity.attributes.wind_gust !== undefined ? entity.attributes.wind_gust : '--';
     
-    // Srážky za den čteme z odsouhlaseného extra atributu 'srazky_den'
+    // Ošetření nárazů větru
+    const gustRaw = entity.attributes.wind_gust;
+    const windGust = gustRaw !== undefined && gustRaw !== null ? gustRaw : '--';
+    
+    // Srážky za den z odsouhlaseného extra atributu
     const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
 
     headerDetails.innerHTML = 
@@ -588,6 +611,7 @@ class PocasiMeteoCard extends HTMLElement {
       `<div>Nárazy: ${windGust} m/s</div>` +
       `<div>Srážky dnes: ${srazkyDen} mm</div>`;
   }
+  
   /**
    * ARCHITEKTURA FRONTENDU: Načte historii pro aktivní čidla a vykreslí grafy.
    * Pro každé čidlo z pole d.sensors stahuje historii za posledních 24 hodin zvlášť.
