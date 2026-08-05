@@ -715,25 +715,26 @@ class PocasiMeteoCard extends HTMLElement {
       const item = canvases[entityId];
       if (!item) continue;
 
-      // Pokud historie chybí, vytvoříme statický bod z aktuálního stavu čidla
-      if (!history[entityId] || !history[entityId][0] || !history[entityId][0].length) {
+      // ARCHITEKTURA FRONTENDU: Oprava kontroly moderního pole odpovědi z HA Historie API
+      if (!history[entityId] || !Array.isArray(history[entityId]) || history[entityId].length === 0) {
         const sState = hass.states[entityId];
-        if (!sState) continue;
+        if (sState) {
+          const val = Number(sState.state);
+          if (!isNaN(val)) {
+            const now = Date.now();
+            const fallbackPoints = [
+              { x: now - 60000, y: val },
+              { x: now, y: val }
+            ];
 
-        const val = Number(sState.state);
-        if (isNaN(val)) continue;
-
-        const now = Date.now();
-        const points = [
-          { x: now - 60000, y: val },
-          { x: now, y: val }
-        ];
-
-        if (this._charts[entityId]) this._charts[entityId].destroy();
-        this._charts[entityId] = new Chart(
-          canvases[entityId].canvas.getContext('2d'),
-          createLineChartConfig(points, canvases[entityId].prettyName, '#3b82f6', theme.textColor, canvases[entityId].id, 'smooth')
-        );
+            if (this._charts[entityId]) this._charts[entityId].destroy();
+            this._charts[entityId] = new Chart(
+              canvases[entityId].canvas.getContext('2d'),
+              createLineChartConfig(fallbackPoints, canvases[entityId].prettyName, '#3b82f6', theme.textColor, canvases[entityId].id, 'smooth')
+            );
+            continue;
+          }
+        }
         continue;
       }
       
