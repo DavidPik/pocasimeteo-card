@@ -741,24 +741,31 @@ class PocasiMeteoCard extends HTMLElement {
       const points = historyToPoints(history[entityId]);
       const sState = hass.states[entityId];
 
-      // ARCHITEKTURA FRONTENDU: Vytáhneme přesný čas posledního importu z API z atributů senzoru
+      // ARCHITEKTURA FRONTENDU: Bezpečné protažení časové osy do posledního času z API
       if (sState && sState.attributes && sState.attributes.timestamp) {
         const apiLastMitTs = Date.parse(sState.attributes.timestamp);
         
-        if (points.length > 0 && !isNaN(apiLastMitTs)) {
-          const lastPoint = points[points.length - 1];
-          // Pokud historie skončila v minulosti, protáhneme konstantní hodnotu až do času posledního API importu
-          if (apiLastMitTs > lastPoint.x) {
-            points.push({ x: apiLastMitTs, y: lastPoint.y });
+        // Pokračujeme pouze pokud pole z historie obsahuje reálné body
+        if (points.length > 0) {
+          if (!isNaN(apiLastMitTs)) {
+            const lastPointIndex = points.length - 1;
+            const lastPoint = points[lastPointIndex];
+            
+            // Pokud čas z API pokročil dále než poslední bod v DB, přidáme koncový bod
+            if (apiLastMitTs > lastPoint.x) {
+              points.push({ x: apiLastMitTs, y: lastPoint.y });
+            }
           }
         }
       }
 
-      // Pojistka pro pole s jedním bodem
+      // Bezpečná pojistka pro pole, které má pouze jeden jediný bod
       if (points.length === 1) {
-        points.push({ x: Date.now(), y: points[0].y });
+        const singlePoint = points[0];
+        points.push({ x: Date.now(), y: singlePoint.y });
       }
 
+      // Kreslíme graf pouze pokud máme 2 nebo více platných souřadnic
       if (points.length > 1) {
         const { canvas, tile, prettyName, legend, id } = item;
         const ctx = canvas.getContext('2d');
