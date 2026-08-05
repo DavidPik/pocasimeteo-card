@@ -591,10 +591,6 @@ class PocasiMeteoCard extends HTMLElement {
     const temp = entity.attributes.temperature !== undefined ? entity.attributes.temperature : '--';
     headerMain.textContent = temp + ' °C';
 
-    // 3. Načtení veličin pro detaily (Tlak, Vlhkost, Síla větru, Srážky)
-    const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
-    const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
-    
     // Zpracování síly a nárazů větru z nativních atributů weather entity
     const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
     const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
