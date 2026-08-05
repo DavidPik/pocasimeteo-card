@@ -595,29 +595,33 @@ class PocasiMeteoCard extends HTMLElement {
     const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
     const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
     
-    // Sestavení výsledného textu větru v km/h shodně s weather platformou HA
-    const windSpeedRaw = entity.attributes.wind_speed;
-    const kompletniVitrText = windSpeed + ' / ' + windGust + ' km/h' + windDirectionText;
+    // Zpracování síly a nárazů větru z nativních atributů weather entity
+    const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
+    const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
+    const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
+
+    // OPRAVA REFERENCE: Explicitně definujeme windSpeed a ošetříme chybějící stavy
+    const speedRaw = entity.attributes.wind_speed;
+    const windSpeed = speedRaw !== undefined && speedRaw !== null ? speedRaw : '--';
     
     const gustRaw = entity.attributes.wind_gust;
     const windGust = gustRaw !== undefined && gustRaw !== null ? gustRaw : '--';
     
-    // Přepočet stupňů na textový směr (např. SSE) pomocí degToDirection
+    // Odvození textového směru větru pomocí vnitřní funkce degToDirection
     const bearingRaw = entity.attributes.wind_bearing;
     let windDirectionText = '';
     if (bearingRaw !== undefined && bearingRaw !== null) {
       windDirectionText = ' ' + degToDirection(bearingRaw);
     }
     
-    // Zabalení do srozumitelného formátu: "Síla větru: rychlost / nárazy m/s SMĚR"
-    const komplektniVitrText = windSpeed + ' / ' + windGust + ' m/s' + windDirectionText;
-    const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
+    // Sestavení výsledného textu větru v km/h shodně s weather platformou HA
+    const kompletniVitrText = windSpeed + ' / ' + windGust + ' km/h' + windDirectionText;
 
     // 4. Vyplnění detailů v původní struktuře, která zaručuje 100% stabilitu panelu
     headerDetails.innerHTML = 
       '<div>Tlak vzduchu: ' + pressure + ' hPa</div>' +
       '<div>Vlhkost: ' + humidity + ' %</div>' +
-      '<div>Síla větru: ' + komplektniVitrText + '</div>' +
+      '<div>Síla větru: ' + kompletniVitrText + '</div>' +
       '<div>Srážky dnes: ' + srazkyDen + ' mm</div>';
   }
 
