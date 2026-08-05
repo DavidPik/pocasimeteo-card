@@ -741,17 +741,16 @@ class PocasiMeteoCard extends HTMLElement {
       const points = historyToPoints(history[entityId]);
       const sState = hass.states[entityId];
 
-      // ARCHITEKTURA FRONTENDU: Bezpečné protažení časové osy do posledního času z API
+      // ARCHITEKTURA FRONTENDU: Bezpečné protažení osy do posledního timestampu z API
       if (sState && sState.attributes && sState.attributes.timestamp) {
         const apiLastMitTs = Date.parse(sState.attributes.timestamp);
         
-        // Pokračujeme pouze pokud pole z historie obsahuje reálné body
+        // Pokračujeme pouze tehdy, pokud historie z databáze není prázdná
         if (points.length > 0) {
           if (!isNaN(apiLastMitTs)) {
-            const lastPointIndex = points.length - 1;
-            const lastPoint = points[lastPointIndex];
+            const lastPoint = points[points.length - 1];
             
-            // Pokud čas z API pokročil dále než poslední bod v DB, přidáme koncový bod
+            // Pokud čas z API pokročil dále než poslední uložený bod v DB, protáhneme křivku
             if (apiLastMitTs > lastPoint.x) {
               points.push({ x: apiLastMitTs, y: lastPoint.y });
             }
@@ -759,13 +758,15 @@ class PocasiMeteoCard extends HTMLElement {
         }
       }
 
-      // Bezpečná pojistka pro pole, které má pouze jeden jediný bod
+      // BEZPEČNÁ POJISTKA PRO JEDEN BOD: Správně vytáhneme objekt na indexu 0
       if (points.length === 1) {
-        const singlePoint = points[0];
-        points.push({ x: Date.now(), y: singlePoint.y });
+        const firstPointObj = points[0];
+        if (firstPointObj && firstPointObj.y !== undefined) {
+          points.push({ x: Date.now(), y: firstPointObj.y });
+        }
       }
 
-      // Kreslíme graf pouze pokud máme 2 nebo více platných souřadnic
+      // Kreslíme pouze v případě, že pole obsahuje validní a bezpečné body pro osy
       if (points.length > 1) {
         const { canvas, tile, prettyName, legend, id } = item;
         const ctx = canvas.getContext('2d');
