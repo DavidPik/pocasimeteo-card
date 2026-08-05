@@ -517,7 +517,7 @@ class PocasiMeteoCard extends HTMLElement {
         .pm-header-timestamp { opacity:0.7; font-size:14px; }
         .pm-header-bottom { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
         .pm-header-main { font-size:48px; font-weight:300; }
-        .pm-header-details { display:flex; flex-direction:column; gap:4px; font-size:16px; opacity:0.85; }
+        .pm-header-details { display:flex; flex-direction:column; gap:6px; font-size:15px; opacity:0.85; text-align:right; padding-right:12px; min-width:260px; white-space:nowrap; }
         .pm-primary-section { background:rgba(255,255,255,0.03); padding:16px; border-bottom:1px solid rgba(255,255,255,0.1); }
         .pm-secondary-section { background:rgba(255,255,255,0.05); padding:16px; }
         .pm-graphs { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; margin-top:8px; }
@@ -551,8 +551,8 @@ class PocasiMeteoCard extends HTMLElement {
 
   /**
    * ARCHITEKTURA FRONTENDU: Bezpečně aktualizuje texty v záhlaví karty.
-   * Zachovává původní strukturu ID prvků (header-details), čímž plně vyhovuje
-   * vnitřnímu Lovelace enginu a předchází chybě nastavení panelu.
+   * Převádí nativní rychlosti z weather entity (km/h) zpět na m/s,
+   * čímž sjednocuje zobrazení v záhlaví s osami grafů na dashboardu.
    */
   _updateVisualHeader(entity) {
     const d = entity.attributes;
@@ -591,29 +591,36 @@ class PocasiMeteoCard extends HTMLElement {
     const temp = entity.attributes.temperature !== undefined ? entity.attributes.temperature : '--';
     headerMain.textContent = temp + ' °C';
 
-    // Zpracování síly a nárazů větru z nativních atributů weather entity
-    const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
+    // 3. Načtení veličin pro pravý panel detailů
     const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
     const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
-
-    // OPRAVA REFERENCE: Explicitně definujeme windSpeed a ošetříme chybějící stavy
-    const speedRaw = entity.attributes.wind_speed;
-    const windSpeed = speedRaw !== undefined && speedRaw !== null ? speedRaw : '--';
+    
+    // PŘEPOČET NA M/S: Weather platforma v HA jádru nám dává rychlosti v km/h.
+    // Pro sjednocení s grafy hodnotu vydělíme koeficientem 3.6 a zaokrouhlíme na 1 desetinné místo.
+    const windSpeedRaw = entity.attributes.wind_speed;
+    let windSpeed = '--';
+    if (windSpeedRaw !== undefined && windSpeedRaw !== null) {
+      windSpeed = (float(windSpeedRaw) / 3.6).toFixed(1);
+    }
     
     const gustRaw = entity.attributes.wind_gust;
-    const windGust = gustRaw !== undefined && gustRaw !== null ? gustRaw : '--';
+    let windGust = '--';
+    if (gustRaw !== undefined && gustRaw !== null) {
+      windGust = (float(gustRaw) / 3.6).toFixed(1);
+    }
     
-    // Odvození textového směru větru pomocí vnitřní funkce degToDirection
+    // Přepočet stupňů na textový směr (např. WSW) pomocí vnitřní funkce degToDirection
     const bearingRaw = entity.attributes.wind_bearing;
     let windDirectionText = '';
     if (bearingRaw !== undefined && bearingRaw !== null) {
       windDirectionText = ' ' + degToDirection(bearingRaw);
     }
     
-    // Sestavení výsledného textu větru v km/h shodně s weather platformou HA
-    const kompletniVitrText = windSpeed + ' / ' + windGust + ' km/h' + windDirectionText;
+    // Sestavení výsledného textu větru v jednotkách m/s: např. "1.6 / 3.5 m/s WSW"
+    const kompletniVitrText = windSpeed + ' / ' + windGust + ' m/s' + windDirectionText;
+    const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
 
-    // 4. Vyplnění detailů v původní struktuře, která zaručuje 100% stabilitu panelu
+    // 4. Vyplnění detailů v původní stabilní struktuře s jednotkami m/s
     headerDetails.innerHTML = 
       '<div>Tlak vzduchu: ' + pressure + ' hPa</div>' +
       '<div>Vlhkost: ' + humidity + ' %</div>' +
