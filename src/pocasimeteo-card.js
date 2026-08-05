@@ -514,7 +514,7 @@ class PocasiMeteoCard extends HTMLElement {
         .pm-header-section { padding:16px; background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; gap:12px; }
         .pm-header-top { display:flex; justify-content:space-between; align-items:flex-start; font-size:20px; font-weight:600; }
         .pm-header-title { display:flex; flex-direction:column; gap:4px; }
-        .pm-header-timestamp { opacity:0.7; font-size:14px; }
+        .pm-header-timestamp { opacity:0.7; font-size:13px; text-align:right; flex-grow:1; padding-right:12px; }
         .pm-header-bottom { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
         .pm-header-main { font-size:48px; font-weight:300; }
         .pm-header-details { display:flex; flex-direction:column; gap:6px; font-size:15px; opacity:0.85; text-align:right; padding-right:12px; min-width:260px; white-space:nowrap; }
