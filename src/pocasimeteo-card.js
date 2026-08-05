@@ -737,12 +737,27 @@ class PocasiMeteoCard extends HTMLElement {
         continue;
       }
       
-      const points = historyToPoints(history[entityId][0]);
+      const points = historyToPoints(history[entityId]);
+      const sState = hass.states[entityId];
+
+      // ARCHITEKTURA FRONTENDU: Vytáhneme přesný čas posledního importu z API z atributů senzoru
+      if (sState && sState.attributes && sState.attributes.timestamp) {
+        const apiLastMitTs = Date.parse(sState.attributes.timestamp);
+        
+        if (points.length > 0 && !isNaN(apiLastMitTs)) {
+          const lastPoint = points[points.length - 1];
+          // Pokud historie skončila v minulosti, protáhneme konstantní hodnotu až do času posledního API importu
+          if (apiLastMitTs > lastPoint.x) {
+            points.push({ x: apiLastMitTs, y: lastPoint.y });
+          }
+        }
+      }
+
+      // Pojistka pro pole s jedním bodem
       if (points.length === 1) {
         points.push({ x: Date.now(), y: points[0].y });
       }
-      
-      // Pokračujeme pouze pokud máme v poli 2 nebo více bodů
+
       if (points.length > 1) {
         const { canvas, tile, prettyName, legend, id } = item;
         const ctx = canvas.getContext('2d');
