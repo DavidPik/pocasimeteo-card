@@ -551,7 +551,7 @@ class PocasiMeteoCard extends HTMLElement {
 
   /**
    * ARCHITEKTURA FRONTENDU: Bezpečně aktualizuje texty v záhlaví karty.
-   * Převádí nativní rychlosti z weather entity (km/h) zpět na m/s,
+   * Převádí nativní rychlosti z weather entity (km/h) zpět na m/s pomocí parseFloat,
    * čímž sjednocuje zobrazení v záhlaví s osami grafů na dashboardu.
    */
   _updateVisualHeader(entity) {
@@ -582,6 +582,7 @@ class PocasiMeteoCard extends HTMLElement {
     const rawState = entity.state;
     const stateText = conditionTranslations[rawState] || rawState; 
     const lokalita = d.lokalita_stanice || d.friendly_name || 'Meteostanice';
+    const cas = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
 
     // 1. Vyplnění horního řádku (Název a čas aktualizace z API)
     headerTitle.textContent = lokalita + ' — ' + stateText;
@@ -595,18 +596,17 @@ class PocasiMeteoCard extends HTMLElement {
     const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
     const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
     
-    // PŘEPOČET NA M/S: Weather platforma v HA jádru nám dává rychlosti v km/h.
-    // Pro sjednocení s grafy hodnotu vydělíme koeficientem 3.6 a zaokrouhlíme na 1 desetinné místo.
+    // PŘEPOČET NA M/S s opravou na parseFloat:
     const windSpeedRaw = entity.attributes.wind_speed;
     let windSpeed = '--';
     if (windSpeedRaw !== undefined && windSpeedRaw !== null) {
-      windSpeed = (float(windSpeedRaw) / 3.6).toFixed(1);
+      windSpeed = (parseFloat(windSpeedRaw) / 3.6).toFixed(1);
     }
     
     const gustRaw = entity.attributes.wind_gust;
     let windGust = '--';
     if (gustRaw !== undefined && gustRaw !== null) {
-      windGust = (float(gustRaw) / 3.6).toFixed(1);
+      windGust = (parseFloat(gustRaw) / 3.6).toFixed(1);
     }
     
     // Přepočet stupňů na textový směr (např. WSW) pomocí vnitřní funkce degToDirection
@@ -616,7 +616,7 @@ class PocasiMeteoCard extends HTMLElement {
       windDirectionText = ' ' + degToDirection(bearingRaw);
     }
     
-    // Sestavení výsledného textu větru v jednotkách m/s: např. "1.6 / 3.5 m/s WSW"
+    // Sestavení výsledného textu větru v jednotkách m/s
     const kompletniVitrText = windSpeed + ' / ' + windGust + ' m/s' + windDirectionText;
     const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
 
