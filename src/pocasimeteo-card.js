@@ -595,9 +595,9 @@ class PocasiMeteoCard extends HTMLElement {
     const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
     const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
     
-    // Zpracování rychlosti větru a nárazů podle vašeho pokynu
+    // Sestavení výsledného textu větru v km/h shodně s weather platformou HA
     const windSpeedRaw = entity.attributes.wind_speed;
-    const windSpeed = windSpeedRaw !== undefined && windSpeedRaw !== null ? windSpeedRaw : '--';
+    const komplektniVitrText = windSpeed + ' / ' + windGust + ' km/h' + windDirectionText;
     
     const gustRaw = entity.attributes.wind_gust;
     const windGust = gustRaw !== undefined && gustRaw !== null ? gustRaw : '--';
