@@ -207,7 +207,7 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId, se
   const yMinAxis = isDynamic ? undefined : 0;
   const isStepped = sensorStyle === 'stepped';
 
-  // Určíme konec osy podle timestampu z API, nouzově použijeme aktuální čas
+  // Fixace osy X: konec je čas z API (nouzově aktuální čas v prohlížeči)
   const endX = lastUpdateTs && !isNaN(lastUpdateTs) ? lastUpdateTs : Date.now();
   const startX = endX - 24 * 3600 * 1000;
 
@@ -726,71 +726,44 @@ class PocasiMeteoCard extends HTMLElement {
       const item = canvases[entityId];
       if (!item) continue;
 
-      // ARCHITEKTURA FRONTENDU: Oprava kontroly moderního pole odpovědi z HA Historie API
-      if (!history[entityId] || !Array.isArray(history[entityId]) || history[entityId].length === 0) {
+      // Pokud historie chybí, vytvoříme statický bod z aktuálního stavu čidla
+      if (!history[entityId] || !history[entityId][0] || !history[entityId][0].length) {
         const sState = hass.states[entityId];
-        if (sState) {
-          const val = Number(sState.state);
-          if (!isNaN(val)) {
-            const now = Date.now();
-            const fallbackPoints = [
-              { x: now - 60000, y: val },
-              { x: now, y: val }
-            ];
+        if (!sState) continue;
 
-            const apiLastMitTs = sState && sState.attributes && sState.attributes.timestamp ? Date.parse(sState.attributes.timestamp) : Date.now();
+        const val = Number(sState.state);
+        if (isNaN(val)) continue;
 
-            if (this._charts[entityId]) this._charts[entityId].destroy();
-            this._charts[entityId] = new Chart(
-              canvases[entityId].canvas.getContext('2d'),
-              createLineChartConfig(fallbackPoints, canvases[entityId].prettyName, '#3b82f6', theme.textColor, canvases[entityId].id, 'smooth', apiLastMitTs)
-            );
-            continue;
-          }
-        }
+        const now = Date.now();
+        const points = [
+          { x: now - 60000, y: val },
+          { x: now, y: val }
+        ];
+
+        const sStateFallback = hass.states[entityId];
+        const apiLastMitTsFallback = sStateFallback && sStateFallback.attributes && sStateFallback.attributes.timestamp ? Date.parse(sStateFallback.attributes.timestamp) : Date.now();
+
+        if (this._charts[entityId]) this._charts[entityId].destroy();
+        this._charts[entityId] = new Chart(
+          canvases[entityId].canvas.getContext('2d'),
+          createLineChartConfig(points, canvases[entityId].prettyName, '#3b82f6', theme.textColor, canvases[entityId].id, 'smooth', apiLastMitTsFallback)
+        );
         continue;
       }
       
-      const points = historyToPoints(history[entityId]);
-      const sState = hass.states[entityId];
-
-      // ARCHITEKTURA FRONTENDU: Bezpečné protažení osy do posledního timestampu z API
-      if (sState && sState.attributes && sState.attributes.timestamp) {
-        const apiLastMitTs = Date.parse(sState.attributes.timestamp);
-        
-        // Pokračujeme pouze tehdy, pokud historie z databáze není prázdná
-        if (points.length > 0) {
-          if (!isNaN(apiLastMitTs)) {
-            const lastPoint = points[points.length - 1];
-            
-            // Pokud čas z API pokročil dále než poslední uložený bod v DB, protáhneme křivku
-            if (apiLastMitTs > lastPoint.x) {
-              points.push({ x: apiLastMitTs, y: lastPoint.y });
-            }
-          }
-        }
-      }
-
-      // BEZPEČNÁ POJISTKA PRO JEDEN BOD: Správně vytáhneme objekt na indexu 0
+      const points = historyToPoints(history[entityId][0]);
       if (points.length === 1) {
-        const firstPointObj = points[0];
-        if (firstPointObj && firstPointObj.y !== undefined) {
-          points.push({ x: Date.now(), y: firstPointObj.y });
-        }
+        points.push({ x: Date.now(), y: points[0].y });
       }
-
-      // Kreslíme pouze v případě, že pole obsahuje validní a bezpečné body pro osy
+      
+      // Pokračujeme pouze pokud máme v poli 2 nebo více bodů
       if (points.length > 1) {
         const { canvas, tile, prettyName, legend, id } = item;
         const ctx = canvas.getContext('2d');
 
-        const sStateForTs = hass.states[entityId];
-        const apiLastMitTs = sStateForTs && sStateForTs.attributes && sStateForTs.attributes.timestamp ? Date.parse(sStateForTs.attributes.timestamp) : Date.now();
-
-        this._charts[entityId] = new Chart(
-          ctx,
-          createLineChartConfig(points, prettyName, color, theme.textColor, id, sensorStyle, apiLastMitTs)
-        );
+        if (this._charts[entityId]) this._charts[entityId].destroy();
+        canvas.style.backgroundColor = theme.bgColor;
+        tile.style.backgroundColor = theme.bgColor;
 
         // Graf typu Větrná růžice
         if (id === 'vitr_smer') {
@@ -827,9 +800,12 @@ class PocasiMeteoCard extends HTMLElement {
         const color = sState ? (sState.attributes.graph_color || '#3b82f6') : '#3b82f6';
         const sensorStyle = sState?.attributes?.graph_style || 'smooth';
 
+        const sStateForTs = hass.states[entityId];
+        const apiLastMitTs = sStateForTs && sStateForTs.attributes && sStateForTs.attributes.timestamp ? Date.parse(sStateForTs.attributes.timestamp) : Date.now();
+
         this._charts[entityId] = new Chart(
           ctx,
-          createLineChartConfig(points, prettyName, color, theme.textColor, id, sensorStyle)
+          createLineChartConfig(points, prettyName, color, theme.textColor, id, sensorStyle, apiLastMitTs)
         );
 
         legend.innerHTML = 
