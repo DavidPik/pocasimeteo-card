@@ -198,7 +198,7 @@ async function fetchWithRetry(url, hass, options = {}, retry = true) {
  * Na základě parametrů z backendu (color, style) určuje, zda bude graf hladký (smooth)
  * nebo schodovitý (stepped) – např. pro srážky a rychlost větru, jak definuje backend v const.py.
  */
-function createLineChartConfig(points, cleanName, color, textColor, sensorId, sensorStyle) {
+function createLineChartConfig(points, cleanName, color, textColor, sensorId, sensorStyle, lastUpdateTs) {
   const { min, max, minPoint, maxPoint } = computeMinMax(points);
   const rgba = hexToRgba(color, 0.25);
 
@@ -206,6 +206,10 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId, se
   const isDynamic = nameLower.includes('teplota') || nameLower.includes('tlak');
   const yMinAxis = isDynamic ? undefined : 0;
   const isStepped = sensorStyle === 'stepped';
+
+  // Určíme konec osy podle timestampu z API, nouzově použijeme aktuální čas
+  const endX = lastUpdateTs && !isNaN(lastUpdateTs) ? lastUpdateTs : Date.now();
+  const startX = endX - 24 * 3600 * 1000;
 
   return {
     type: 'line',
@@ -242,7 +246,14 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId, se
       maintainAspectRatio: false,
       plugins: { tooltip: {}, legend: { display: false } },
       scales: {
-        x: { type: 'time', time: { unit: 'hour' }, ticks: { color: textColor }, grid: { color: GRID_COLOR } },
+        x: { 
+          type: 'time', 
+          time: { unit: 'hour' }, 
+          min: startX,
+          max: endX,
+          ticks: { color: textColor }, 
+          grid: { color: GRID_COLOR } 
+        },
         y: { min: yMinAxis, ticks: { color: textColor }, grid: { color: GRID_COLOR } }
       }
     }
@@ -727,10 +738,12 @@ class PocasiMeteoCard extends HTMLElement {
               { x: now, y: val }
             ];
 
+            const apiLastMitTs = sState && sState.attributes && sState.attributes.timestamp ? Date.parse(sState.attributes.timestamp) : Date.now();
+
             if (this._charts[entityId]) this._charts[entityId].destroy();
             this._charts[entityId] = new Chart(
               canvases[entityId].canvas.getContext('2d'),
-              createLineChartConfig(fallbackPoints, canvases[entityId].prettyName, '#3b82f6', theme.textColor, canvases[entityId].id, 'smooth')
+              createLineChartConfig(fallbackPoints, canvases[entityId].prettyName, '#3b82f6', theme.textColor, canvases[entityId].id, 'smooth', apiLastMitTs)
             );
             continue;
           }
@@ -771,9 +784,13 @@ class PocasiMeteoCard extends HTMLElement {
         const { canvas, tile, prettyName, legend, id } = item;
         const ctx = canvas.getContext('2d');
 
-        if (this._charts[entityId]) this._charts[entityId].destroy();
-        canvas.style.backgroundColor = theme.bgColor;
-        tile.style.backgroundColor = theme.bgColor;
+        const sStateForTs = hass.states[entityId];
+        const apiLastMitTs = sStateForTs && sStateForTs.attributes && sStateForTs.attributes.timestamp ? Date.parse(sStateForTs.attributes.timestamp) : Date.now();
+
+        this._charts[entityId] = new Chart(
+          ctx,
+          createLineChartConfig(points, prettyName, color, theme.textColor, id, sensorStyle, apiLastMitTs)
+        );
 
         // Graf typu Větrná růžice
         if (id === 'vitr_smer') {
