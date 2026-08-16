@@ -708,23 +708,75 @@ class PocasiMeteoCard extends HTMLElement {
 
         section.container.appendChild(tile);
 
-        // --- START: synchronizace CSS rozměru a canvas pixel bufferu (DPR-aware)
-        // Po přidání tile do DOM můžeme zjistit skutečnou CSS šířku kontejneru.
-        const computedTileWidth = tile.getBoundingClientRect().width;
+        // --- START: DPR-aware sizing + accounting for title/legend/padding (robustní)
+        // Po přidání tile do DOM zjistíme skutečné dostupné rozměry a odečteme prostor nadpisu/legendy.
+        const tileRect = tile.getBoundingClientRect();
+        const tileStyle = getComputedStyle(tile);
+        const paddingH = parseFloat(tileStyle.paddingLeft || 0) + parseFloat(tileStyle.paddingRight || 0);
+        const paddingV = parseFloat(tileStyle.paddingTop || 0) + parseFloat(tileStyle.paddingBottom || 0);
 
-        // Rozlišení hodnoty this._graphWidth:
-        const resolveCssWidth = (val, fallback) => {
-          if (val === null || val === undefined) return fallback;
-          if (typeof val === 'number') return val;
+        // Funkce pro rozlišení hodnot graph_width
+        const resolveCssWidthRaw = (val) => {
+          if (val === null || val === undefined) return null;
+          if (typeof val === 'number') return { type: 'px', value: val };
           if (typeof val === 'string') {
             const s = val.trim();
-            if (s.endsWith('%')) return fallback;
-            if (s.endsWith('px')) return parseFloat(s);
+            if (s.endsWith('%')) return { type: '%', value: parseFloat(s) };
+            if (s.endsWith('px')) return { type: 'px', value: parseFloat(s) };
+            if (s.startsWith('var(')) return { type: 'var', value: s };
             const n = parseFloat(s);
-            return isNaN(n) ? fallback : n;
+            return isNaN(n) ? null : { type: 'px', value: n };
           }
-          return fallback;
+          return null;
         };
+
+        const rawW = resolveCssWidthRaw(this._graphWidth);
+
+        // Šířka v CSS px, kterou chceme použít pro canvas (vypočtená)
+        let cssWidthPx;
+        if (rawW && rawW.type === 'px') {
+          cssWidthPx = rawW.value;
+        } else if (rawW && rawW.type === '%') {
+          // procenta: použijeme šířku tile (po layoutu) jako základ
+          cssWidthPx = tileRect.width - paddingH;
+          cssWidthPx = Math.max(40, cssWidthPx * (rawW.value / 100));
+        } else {
+          // var(...) nebo null: použijeme skutečnou šířku tile (fallback)
+          cssWidthPx = tileRect.width - paddingH;
+        }
+
+        // Výška, kterou chceme pro canvas v CSS px (základní návrh)
+        const desiredCanvasBase = s.id === 'vitr_smer' ? 300 : 220;
+
+        // Odečteme výšku nadpisu (title) a legendy, pokud existují
+        const titleEl = tile.querySelector('.pm-graph-title');
+        const legendEl = tile.querySelector('.pm-legend');
+        const titleH = titleEl ? titleEl.getBoundingClientRect().height : 0;
+        const legendH = legendEl ? legendEl.getBoundingClientRect().height : 0;
+
+        // Malá mezera mezi prvky
+        const gapBetween = 8;
+
+        // Výsledná CSS výška canvasu
+        let cssHeightPx = Math.max(80, desiredCanvasBase - titleH - legendH - gapBetween - paddingV);
+
+        // Aplikujeme CSS rozměry (layout) a nastavíme interní pixel buffer podle DPR
+        canvas.style.display = 'block';
+        canvas.style.width = Math.round(cssWidthPx) + 'px';
+        canvas.style.height = Math.round(cssHeightPx) + 'px';
+
+        const dpr = window.devicePixelRatio || 1;
+        const ctx = canvas.getContext('2d');
+
+        // Reset transform před škálováním (zabrání dvojitému scale při opakovaném volání)
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        canvas.width = Math.round(cssWidthPx * dpr);
+        canvas.height = Math.round(cssHeightPx * dpr);
+
+        // Škálování kontextu tak, aby 1 jednotka v kreslení odpovídala 1 CSS px
+        ctx.scale(dpr, dpr);
+        // --- END
 
         const cssWidth = resolveCssWidth(this._graphWidth, computedTileWidth);
 
