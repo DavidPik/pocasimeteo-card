@@ -783,7 +783,6 @@ class PocasiMeteoCard extends HTMLElement {
         // Aplikujeme CSS šířku na canvas (pro layout) a nastavíme interní pixel buffer podle DPR.
         canvas.style.width = cssWidth + 'px';
         canvas.style.display = 'block';
-        const dpr = window.devicePixelRatio || 1;
         canvas.width = Math.round(cssWidth * dpr);
         canvas.height = Math.round((s.id === 'vitr_smer' ? 300 : 220) * dpr);
         // škálujeme kontext, aby kreslení odpovídalo CSS jednotkám
