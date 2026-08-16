@@ -688,6 +688,26 @@ class PocasiMeteoCard extends HTMLElement {
           tile.style.width = (typeof this._graphWidth === 'number') ? `${this._graphWidth}px` : this._graphWidth;
         }
 
+        // --- Vytvoření prvků dlaždice (nutné před sizingem)
+        const sState = hass.states[s.entity_id];
+        const unit = sState?.attributes?.unit_of_measurement || '';
+        const prettyName = sState?.attributes?.friendly_name || s.id;
+
+        const titleElement = document.createElement('div');
+        titleElement.classList.add('pm-graph-title');
+        titleElement.textContent = prettyName + (unit ? ' - ' + unit : '');
+
+        const canvas = document.createElement('canvas');
+        canvas.classList.add('pm-graph');
+
+        const legend = document.createElement('div');
+        legend.classList.add('pm-legend');
+
+        // Přidáme elementy do dlaždice a teprve potom do DOMu
+        tile.appendChild(titleElement);
+        tile.appendChild(canvas);
+        tile.appendChild(legend);
+
         section.container.appendChild(tile);
 
         // --- START: sizing pro px i % (synchronně) + DPR-aware canvas buffer
