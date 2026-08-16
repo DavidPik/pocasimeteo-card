@@ -532,8 +532,8 @@ class PocasiMeteoCard extends HTMLElement {
         .pm-header-details { display:flex; flex-direction:column; gap:6px; font-size:15px; opacity:0.85; text-align:right; padding-right:12px; min-width:260px; white-space:nowrap; }
         .pm-primary-section { background:rgba(255,255,255,0.03); padding:16px; border-bottom:1px solid rgba(255,255,255,0.1); }
         .pm-secondary-section { background:rgba(255,255,255,0.05); padding:16px; }
-        .pm-graphs { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; margin-top:8px; }
-        .pm-graph-tile { background:var(--ha-card-background,#1c1c1c); border-radius:12px; padding:4px; box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display:flex; flex-direction:column; }
+        .pm-graphs { display:flex; flex-wrap:wrap; gap:16px; margin-top:8px; align-items:flex-start; }
+        .pm-graph-tile { box-sizing:border-box; flex: 0 0 auto; background:var(--ha-card-background,#1c1c1c); border-radius:12px; padding:4px; box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display:flex; flex-direction:column; }
         .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; padding: 4px; }
         .pm-graph { width:100%; height:220px; }
         .pm-legend { margin-top:0px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:14px; opacity:0.8; padding: 4px; }
@@ -708,6 +708,36 @@ class PocasiMeteoCard extends HTMLElement {
 
         section.container.appendChild(tile);
 
+        // --- START: synchronizace CSS rozměru a canvas pixel bufferu (DPR-aware)
+        // Po přidání tile do DOM můžeme zjistit skutečnou CSS šířku kontejneru.
+        const computedTileWidth = tile.getBoundingClientRect().width;
+
+        // Rozlišení hodnoty this._graphWidth:
+        const resolveCssWidth = (val, fallback) => {
+          if (val === null || val === undefined) return fallback;
+          if (typeof val === 'number') return val;
+          if (typeof val === 'string') {
+            const s = val.trim();
+            if (s.endsWith('%')) return fallback;
+            if (s.endsWith('px')) return parseFloat(s);
+            const n = parseFloat(s);
+            return isNaN(n) ? fallback : n;
+          }
+          return fallback;
+        };
+
+        const cssWidth = resolveCssWidth(this._graphWidth, computedTileWidth);
+
+        // Aplikujeme CSS šířku na canvas (pro layout) a nastavíme interní pixel buffer podle DPR.
+        canvas.style.width = cssWidth + 'px';
+        canvas.style.display = 'block';
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(cssWidth * dpr);
+        canvas.height = Math.round((s.id === 'vitr_smer' ? 300 : 220) * dpr);
+        // škálujeme kontext, aby kreslení odpovídalo CSS jednotkám
+        canvas.getContext('2d').scale(dpr, dpr);
+        // --- END
+        
         canvases[s.entity_id] = { canvas, tile, prettyName, legend, id: s.id };
       }
     }
@@ -789,6 +819,7 @@ class PocasiMeteoCard extends HTMLElement {
             options: {
               responsive: false,
               maintainAspectRatio: false,
+              aspectRatio: 1,
               layout: { padding: { top: 20, bottom: 20, left: 10, right: 10 }},
               scales: { r: { ticks: { display: false }, grid: { display: false }, beginAtZero: true }},
               plugins: { tooltip: {}, legend: { display: false } }
