@@ -462,7 +462,8 @@ class PocasiMeteoCard extends HTMLElement {
       throw new Error('entity is required');
     }
     this.config = { show_graphs: true, hide_sensors: [], ...config };
-    
+    this._graphWidth = this.config.graph_width ?? null;
+
     if (!this.shadowRoot) {
       this.attachShadow({ mode: 'open' });
     }
@@ -680,6 +681,9 @@ class PocasiMeteoCard extends HTMLElement {
 
         const tile = document.createElement('div');
         tile.classList.add('pm-graph-tile');
+        if (this._graphWidth !== null && this._graphWidth !== undefined) {
+          tile.style.width = (typeof this._graphWidth === 'number') ? `${this._graphWidth}px` : this._graphWidth;
+        }
 
         const unit = sState.attributes.unit_of_measurement || '';
         const prettyName = sState.attributes.friendly_name || s.id;
@@ -691,6 +695,9 @@ class PocasiMeteoCard extends HTMLElement {
         const canvas = document.createElement('canvas');
         canvas.classList.add('pm-graph');
         canvas.height = s.id === 'vitr_smer' ? 300 : 220;
+        if (this._graphWidth !== null && this._graphWidth !== undefined) {
+          canvas.style.width = (typeof this._graphWidth === 'number') ? `${this._graphWidth}px` : this._graphWidth;
+        }
 
         const legend = document.createElement('div');
         legend.classList.add('pm-legend');
