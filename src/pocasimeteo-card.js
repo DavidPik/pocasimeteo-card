@@ -709,87 +709,48 @@ class PocasiMeteoCard extends HTMLElement {
 
         section.container.appendChild(tile);
 
-        // --- START: robustní sizing + DPR + safe chart creation (use RAF)
-        // Vytvoříme sizing a chart až po dokončení layoutu (requestAnimationFrame),
-        // aby procenta a CSS proměnné byly vyhodnoceny korektně.
-        (function initCanvasSizing(localCanvas, localTile, sensorId, prettyName, legendEl, id) {
-          // zkopírujeme reference pro closure
-          requestAnimationFrame(() => {
-            // 1) měření dostupné šířky dlaždice (po layoutu)
-            const tileRect = localTile.getBoundingClientRect();
-            const tileStyle = getComputedStyle(localTile);
-            const paddingH = parseFloat(tileStyle.paddingLeft || 0) + parseFloat(tileStyle.paddingRight || 0);
-            const paddingV = parseFloat(tileStyle.paddingTop || 0) + parseFloat(tileStyle.paddingBottom || 0);
+        // --- START: synchronous sizing + DPR-aware buffer (no RAF)
+        const tileRect = tile.getBoundingClientRect();
+        const tileStyle = getComputedStyle(tile);
+        const paddingH = parseFloat(tileStyle.paddingLeft || 0) + parseFloat(tileStyle.paddingRight || 0);
+        const paddingV = parseFloat(tileStyle.paddingTop || 0) + parseFloat(tileStyle.paddingBottom || 0);
 
-            // 2) rozlišení hodnoty graph_width
-            const raw = (this._graphWidth === undefined) ? null : this._graphWidth;
-            let cssWidthPx;
-            if (raw === null || raw === undefined) {
-              cssWidthPx = tileRect.width - paddingH;
-            } else if (typeof raw === 'number') {
-              cssWidthPx = raw;
-            } else if (typeof raw === 'string') {
-              const s = raw.trim();
-              if (s.endsWith('px')) {
-                cssWidthPx = parseFloat(s);
-              } else if (s.endsWith('%')) {
-                const pct = parseFloat(s);
-                cssWidthPx = Math.max(40, (tileRect.width - paddingH) * (pct / 100));
-              } else {
-                // var(...) nebo jiný string: použijeme skutečnou šířku tile jako fallback
-                cssWidthPx = tileRect.width - paddingH;
-              }
-            } else {
-              cssWidthPx = tileRect.width - paddingH;
-            }
+        // resolve graph_width
+        let cssWidthPx;
+        if (this._graphWidth === null || this._graphWidth === undefined) {
+          cssWidthPx = tileRect.width - paddingH;
+        } else if (typeof this._graphWidth === 'number') {
+          cssWidthPx = this._graphWidth;
+        } else {
+          const s = String(this._graphWidth).trim();
+          if (s.endsWith('px')) cssWidthPx = parseFloat(s);
+          else if (s.endsWith('%')) cssWidthPx = Math.max(40, (tileRect.width - paddingH) * (parseFloat(s) / 100));
+          else cssWidthPx = tileRect.width - paddingH; // var(...) fallback
+        }
 
-            // 3) výška canvasu v CSS px (odečteme title/legend/padding)
-            const desiredBase = id === 'vitr_smer' ? 300 : 220;
-            const titleEl = localTile.querySelector('.pm-graph-title');
-            const titleH = titleEl ? titleEl.getBoundingClientRect().height : 0;
-            const legendH = legendEl ? legendEl.getBoundingClientRect().height : 0;
-            const gapBetween = 8;
-            let cssHeightPx = Math.max(80, desiredBase - titleH - legendH - gapBetween - paddingV);
+        const desiredBase = s.id === 'vitr_smer' ? 300 : 220;
+        const titleH = titleElement.getBoundingClientRect().height || 0;
+        const legendH = legend.getBoundingClientRect().height || 0;
+        const gapBetween = 8;
+        let cssHeightPx = Math.max(80, desiredBase - titleH - legendH - gapBetween - paddingV);
 
-            // 4) pro windrose vynutíme čtverec (šířka = výška)
-            if (id === 'vitr_smer') {
-              cssHeightPx = Math.round(cssWidthPx);
-            }
+        // windrose: force square
+        if (s.id === 'vitr_smer') cssHeightPx = Math.round(cssWidthPx);
 
-            // 5) aplikace CSS rozměrů (layout) a nastavení interního bufferu DPR-aware
-            localCanvas.style.display = 'block';
-            localCanvas.style.width = Math.round(cssWidthPx) + 'px';
-            localCanvas.style.height = Math.round(cssHeightPx) + 'px';
+        canvas.style.display = 'block';
+        canvas.style.width = Math.round(cssWidthPx) + 'px';
+        canvas.style.height = Math.round(cssHeightPx) + 'px';
 
-            const ctx = localCanvas.getContext('2d');
+        const ctx = canvas.getContext('2d');
+        if (typeof ctx.resetTransform === 'function') ctx.resetTransform(); else ctx.setTransform(1,0,0,1,0,0);
 
-            // reset transformace před nastavením bufferu (zabrání vícenásobnému scale)
-            if (typeof ctx.resetTransform === 'function') {
-              ctx.resetTransform();
-            } else {
-              ctx.setTransform(1, 0, 0, 1, 0, 0);
-            }
-
-            const _dpr = window.devicePixelRatio || 1;
-            localCanvas.width = Math.round(cssWidthPx * _dpr);
-            localCanvas.height = Math.round(cssHeightPx * _dpr);
-            ctx.scale(_dpr, _dpr);
-
-            // 6) zničit starý chart pokud existuje (bezpečně)
-            if (this._charts[sensorId]) {
-              try { this._charts[sensorId].destroy(); } catch (e) {}
-              delete this._charts[sensorId];
-            }
-
-            // 7) vytvoření Chartu až po korektním sizingu
-            // Poznámka: samotná konfigurace grafu (line/polar) se vytváří níže v původním kódu.
-            // Zde pouze připravíme kontext a necháme původní logiku vytvořit Chart pomocí createLineChartConfig nebo polar config.
-            // Pro jednoduchost: uložíme canvas/ctx do mapy a pokračujeme v původním flow.
-            canvases[sensorId] = { canvas: localCanvas, tile: localTile, prettyName, legend: legendEl, id };
-          });
-        }).call(this, canvas, tile, s.entity_id, prettyName, legend, s.id);
+        const _dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(cssWidthPx * _dpr);
+        canvas.height = Math.round(cssHeightPx * _dpr);
+        ctx.scale(_dpr, _dpr);
         // --- END
 
+        // keep synchronous mapping so history fetch sees all canvases
         canvases[s.entity_id] = { canvas, tile, prettyName, legend, id: s.id };
       }
     }
