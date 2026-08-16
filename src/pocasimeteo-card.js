@@ -683,7 +683,11 @@ class PocasiMeteoCard extends HTMLElement {
         const tile = document.createElement('div');
         tile.classList.add('pm-graph-tile');
 
-        // Aplikuj požadovanou šířku na tile před appendem (může být '50%' nebo '480px' nebo var(...))
+        // Zajistíme, že tile bude respektovat nastavenou šířku v flexboxu
+        tile.style.boxSizing = 'border-box';
+        tile.style.flex = '0 0 auto';
+
+        // Aplikuj požadovanou šířku na tile před appendem ...
         if (this._graphWidth !== null && this._graphWidth !== undefined) {
           tile.style.width = (typeof this._graphWidth === 'number') ? `${this._graphWidth}px` : this._graphWidth;
         }
@@ -710,27 +714,28 @@ class PocasiMeteoCard extends HTMLElement {
         section.container.appendChild(tile);
 
         // --- START: sizing pro px i % (synchronně) + DPR-aware canvas buffer
-        const tileRect = tile.getBoundingClientRect();
+        // Použijeme clientWidth jako spolehlivý zdroj rozměru (řeší % v rámci flex/box layoutu)
+        const tileClientWidth = tile.clientWidth || tile.getBoundingClientRect().width;
         const tileStyle = getComputedStyle(tile);
         const paddingH = parseFloat(tileStyle.paddingLeft || 0) + parseFloat(tileStyle.paddingRight || 0);
         const paddingV = parseFloat(tileStyle.paddingTop || 0) + parseFloat(tileStyle.paddingBottom || 0);
 
-        // Rozlišení graph_width: číslo => px; 'xxxpx' => px; 'yy%' => procento z tile; var(...) nebo jinak => fallback na tile width
+        // Rozlišení graph_width: číslo => px; 'xxxpx' => px; 'yy%' => procento z tileClientWidth; var(...) nebo jinak => fallback na tileClientWidth
         let cssWidthPx;
         if (this._graphWidth === null || this._graphWidth === undefined) {
-          cssWidthPx = tileRect.width - paddingH;
+          cssWidthPx = tileClientWidth;
         } else if (typeof this._graphWidth === 'number') {
           cssWidthPx = this._graphWidth;
         } else {
-          const s = String(this._graphWidth).trim();
-          if (s.endsWith('px')) {
-            cssWidthPx = parseFloat(s);
-          } else if (s.endsWith('%')) {
-            const pct = parseFloat(s);
-            cssWidthPx = Math.max(40, (tileRect.width - paddingH) * (pct / 100));
+          const sW = String(this._graphWidth).trim();
+          if (sW.endsWith('px')) {
+            cssWidthPx = parseFloat(sW);
+          } else if (sW.endsWith('%')) {
+            const pct = parseFloat(sW);
+            cssWidthPx = Math.max(40, Math.round(tileClientWidth * (pct / 100)));
           } else {
             // var(...) nebo jiný string: použijeme vypočtenou šířku tile jako fallback
-            cssWidthPx = tileRect.width - paddingH;
+            cssWidthPx = tileClientWidth;
           }
         }
 
@@ -741,8 +746,12 @@ class PocasiMeteoCard extends HTMLElement {
         const gapBetween = 8;
         let cssHeightPx = Math.max(80, desiredBase - titleH - legendH - gapBetween - paddingV);
 
-        // Pro windrose vynutíme čtverec (šířka = výška)
-        if (s.id === 'vitr_smer') cssHeightPx = Math.round(cssWidthPx);
+        // Pro windrose vynutíme čtverec: použijeme menší z dostupné šířky a výšky
+        if (s.id === 'vitr_smer') {
+          const cssSize = Math.round(Math.min(cssWidthPx, cssHeightPx));
+          cssWidthPx = cssSize;
+          cssHeightPx = cssSize;
+        }
 
         // Aplikujeme CSS rozměry (převod procent -> px) a nastavíme interní pixel buffer DPR-aware
         canvas.style.display = 'block';
