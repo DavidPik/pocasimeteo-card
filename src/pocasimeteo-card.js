@@ -689,7 +689,6 @@ class PocasiMeteoCard extends HTMLElement {
         }
 
         // --- Vytvoření prvků dlaždice (nutné před sizingem)
-        const sState = hass.states[s.entity_id];
         const unit = sState?.attributes?.unit_of_measurement || '';
         const prettyName = sState?.attributes?.friendly_name || s.id;
 
