@@ -277,7 +277,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         const { cx, cy, R } = computeChartGeometry(chart.chartArea);
         const dx = chart.$mouse.x - cx;
         const dy = chart.$mouse.y - cy;
-        const dist = Math.sqrt(dx * dx + dy * dy); // DPI: Řádek končil dx * dy
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist > R) {
           chart.$windHover = null;
@@ -453,6 +453,8 @@ class PocasiMeteoCard extends HTMLElement {
     this._charts = {};
     this._lastApiTimestamp = null; // ARCHITEKTURA FRONTENDU: Sleduje změnu dat z API
     this._lastFetch = 0;
+    this._resizeObserver = null;
+    this._currentHass = null;
   }
 
   /**
@@ -462,17 +464,40 @@ class PocasiMeteoCard extends HTMLElement {
     if (!config.entity) {
       throw new Error('entity is required');
     }
-    this.config = { show_graphs: true, hide_sensors: [], ...config };
-    this._graphWidth = this.config.graph_width ?? null;
+    this.config = { show_graphs: true, hide_sensors: [], graphs_per_row: 2, ...config };
 
     if (!this.shadowRoot) {
       this.attachShadow({ mode: 'open' });
     }
   }
+
+  connectedCallback() {
+    // Sledování změn velikosti kontejneru pro automatický responzivní přepočet rozměrů grafů
+    this._resizeObserver = new ResizeObserver(() => {
+      if (this._currentHass && this._initialized && !this._rendering) {
+        const entity = this._currentHass.states[this.config.entity];
+        if (entity && entity.attributes && entity.attributes.sensors) {
+          this._rendering = true;
+          this._updateCharts(this._currentHass, entity).finally(() => {
+            this._rendering = false;
+          });
+        }
+      }
+    });
+    this._resizeObserver.observe(this);
+  }
+
+  disconnectedCallback() {
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+    }
+  }
+
   /**
    * Spouští se pokaždé, když Home Assistant změní stav jakékoliv entity v systému.
    */
   set hass(hass) {
+    this._currentHass = hass;
     const entity = hass.states[this.config.entity];
 
     // Prvotní sestavení HTML struktury (Shadow DOM)
@@ -595,7 +620,6 @@ class PocasiMeteoCard extends HTMLElement {
     const rawState = entity.state;
     const stateText = conditionTranslations[rawState] || rawState; 
     const lokalita = d.lokalita_stanice || d.friendly_name || 'Meteostanice';
-    const cas = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
 
     // 1. Vyplnění horního řádku (Název a čas aktualizace z API)
     headerTitle.textContent = lokalita + ' — ' + stateText;
@@ -666,8 +690,14 @@ class PocasiMeteoCard extends HTMLElement {
       { type: 'secondary', container: secondaryGraphs }
     ];
 
+    // Výpočet šířky dlaždice na základě parametru graphs_per_row
+    const containerRect = primaryGraphs.getBoundingClientRect();
+    const containerWidth = containerRect.width || this.getBoundingClientRect().width || 400;
+    const graphsPerRow = Number(this.config.graphs_per_row) || 2;
+    const gap = 16;
+    const tileWidthPx = Math.floor((containerWidth - (graphsPerRow - 1) * gap) / graphsPerRow);
+
     // 1. KROK: Dynamicky vygenerujeme HTML elementy a Canvas pro každé viditelné čidlo
-    // Poznámka: sizing pro % musí počkat na dokončení layoutu -> použijeme await s RAF retry
     for (const section of targetSections) {
       const filteredMeta = sensorsMeta.filter(s =>
         s.type === section.type &&
@@ -681,21 +711,12 @@ class PocasiMeteoCard extends HTMLElement {
         const sState = hass.states[s.entity_id];
         if (!sState) continue;
 
-        // vytvoření dlaždice a jejích elementů
         const tile = document.createElement('div');
         tile.classList.add('pm-graph-tile');
+        tile.style.width = `${tileWidthPx}px`;
 
-        // Zajistíme, že tile bude respektovat nastavenou šířku v flexboxu
-        tile.style.boxSizing = 'border-box';
-        tile.style.flex = '0 0 auto';
-
-        // Aplikuj požadovanou šířku na tile před appendem ...
-        if (this._graphWidth !== null && this._graphWidth !== undefined) {
-          tile.style.width = (typeof this._graphWidth === 'number') ? `${this._graphWidth}px` : this._graphWidth;
-        }
-
-        const unit = sState?.attributes?.unit_of_measurement || '';
-        const prettyName = sState?.attributes?.friendly_name || s.id;
+        const unit = sState.attributes.unit_of_measurement || '';
+        const prettyName = sState.attributes.friendly_name || s.id;
 
         const titleElement = document.createElement('div');
         titleElement.classList.add('pm-graph-title');
@@ -707,93 +728,30 @@ class PocasiMeteoCard extends HTMLElement {
         const legend = document.createElement('div');
         legend.classList.add('pm-legend');
 
-        // Přidáme elementy do dlaždice a teprve potom do DOMu
         tile.appendChild(titleElement);
         tile.appendChild(canvas);
         tile.appendChild(legend);
 
         section.container.appendChild(tile);
 
-        // --- START: sizing pro px i % (čeká na dokončení layoutu pomocí RAF retry)
-        // Zabalíme sizing do Promise a awaitujeme, aby canvases bylo naplněno synchronně
-        await new Promise(resolve => {
-          const doMeasure = () => {
-            // Použijeme clientWidth jako spolehlivý zdroj rozměru (řeší % v rámci flex/box layoutu)
-            const tileClientWidth = tile.clientWidth || tile.getBoundingClientRect().width;
-            // Pokud ještě není rozměr vyřešen (např. 50% v rodiči), počkej na další frame
-            if (!tileClientWidth || tileClientWidth < 2) {
-              requestAnimationFrame(doMeasure);
-              return;
-            }
+        // --- START: Výpočet výšky canvasu podle požadavků zadání
+        let cssWidthPx = tileWidthPx - 8; // Odpočet vnitřního paddingu dlaždice (padding: 4px ze všech stran = 8px horizontálně)
+        let cssHeightPx = s.id === 'vitr_smer' ? tileWidthPx : Math.round(0.5 * tileWidthPx);
 
-            const tileStyle = getComputedStyle(tile);
-            const paddingH = parseFloat(tileStyle.paddingLeft || 0) + parseFloat(tileStyle.paddingRight || 0);
-            const paddingV = parseFloat(tileStyle.paddingTop || 0) + parseFloat(tileStyle.paddingBottom || 0);
+        canvas.style.display = 'block';
+        canvas.style.width = Math.round(cssWidthPx) + 'px';
+        canvas.style.height = Math.round(cssHeightPx) + 'px';
 
-            // Rozlišení graph_width: číslo => px; 'xxxpx' => px; 'yy%' => procento z tileClientWidth; var(...) nebo jinak => fallback na tileClientWidth
-            let cssWidthPx;
-            if (this._graphWidth === null || this._graphWidth === undefined) {
-              cssWidthPx = tileClientWidth;
-            } else if (typeof this._graphWidth === 'number') {
-              cssWidthPx = this._graphWidth;
-            } else {
-              const sW = String(this._graphWidth).trim();
-              if (sW.endsWith('px')) {
-                cssWidthPx = parseFloat(sW);
-              } else if (sW.endsWith('%')) {
-                const pct = parseFloat(sW);
-                cssWidthPx = Math.max(40, Math.round(tileClientWidth * (pct / 100)));
-              } else {
-                // var(...) nebo jiný string: použijeme vypočtenou šířku tile jako fallback
-                cssWidthPx = tileClientWidth;
-              }
-            }
+        const ctx = canvas.getContext('2d');
+        if (typeof ctx.resetTransform === 'function') ctx.resetTransform(); else ctx.setTransform(1,0,0,1,0,0);
 
-            // Výška canvasu v CSS px (odečteme title/legend/padding)
-            const desiredBase = s.id === 'vitr_smer' ? 300 : 220;
-            const titleH = titleElement.getBoundingClientRect().height || 0;
-            const legendH = legend.getBoundingClientRect().height || 0;
-            const gapBetween = 8;
-            let cssHeightPx = Math.max(80, desiredBase - titleH - legendH - gapBetween - paddingV);
-
-            // Pro windrose vynutíme čtverec: použijeme menší z dostupné šířky a výšky
-            if (s.id === 'vitr_smer') {
-              const cssSize = Math.round(Math.min(cssWidthPx, cssHeightPx));
-              cssWidthPx = cssSize;
-              cssHeightPx = cssSize;
-            }
-
-            // Aplikujeme CSS rozměry (převod procent -> px) a nastavíme interní pixel buffer DPR-aware
-            canvas.style.display = 'block';
-            canvas.style.width = Math.round(cssWidthPx) + 'px';   // důležité: canvas má nyní pevnou px šířku
-            canvas.style.height = Math.round(cssHeightPx) + 'px';
-
-            const ctx = canvas.getContext('2d');
-            if (typeof ctx.resetTransform === 'function') ctx.resetTransform(); else ctx.setTransform(1,0,0,1,0,0);
-
-            const _dpr = window.devicePixelRatio || 1;
-            canvas.width = Math.round(cssWidthPx * _dpr);
-            canvas.height = Math.round(cssHeightPx * _dpr);
-            ctx.scale(_dpr, _dpr);
-
-            // Uložíme i vypočtené CSS rozměry do objektu, aby byly k dispozici při rekreaci grafu
-            canvases[s.entity_id] = {
-              canvas,
-              tile,
-              prettyName,
-              legend,
-              id: s.id,
-              cssWidthPx,
-              cssHeightPx
-            };
-
-            resolve();
-          };
-
-          // start measurement
-          requestAnimationFrame(doMeasure);
-        });
+        const _dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(cssWidthPx * _dpr);
+        canvas.height = Math.round(cssHeightPx * _dpr);
+        ctx.scale(_dpr, _dpr);
         // --- END
+
+        canvases[s.entity_id] = { canvas, tile, prettyName, legend, id: s.id };
       }
     }
 
@@ -835,15 +793,9 @@ class PocasiMeteoCard extends HTMLElement {
         const sStateFallback = hass.states[entityId];
         const apiLastMitTsFallback = sStateFallback && sStateFallback.attributes && sStateFallback.attributes.timestamp ? Date.parse(sStateFallback.attributes.timestamp) : Date.now();
 
-        // destroy existing chart if present (user requested recreate on config change)
-        if (this._charts[entityId]) {
-          try { this._charts[entityId].destroy(); } catch (e) {}
-          delete this._charts[entityId];
-        }
-
-        const ctx = canvases[entityId].canvas.getContext('2d');
+        if (this._charts[entityId]) this._charts[entityId].destroy();
         this._charts[entityId] = new Chart(
-          ctx,
+          canvases[entityId].canvas.getContext('2d'),
           createLineChartConfig(points, canvases[entityId].prettyName, '#3b82f6', theme.textColor, canvases[entityId].id, 'smooth', apiLastMitTsFallback)
         );
         continue;
@@ -856,14 +808,12 @@ class PocasiMeteoCard extends HTMLElement {
       
       // Pokračujeme pouze pokud máme v poli 2 nebo více bodů
       if (points.length > 1) {
-        const { canvas, tile, prettyName, legend, id, cssWidthPx, cssHeightPx } = item;
+        const { canvas, tile, prettyName, legend, id } = item;
         const ctx = canvas.getContext('2d');
 
-        // destroy existing chart if present (we recreate to reflect backend config changes)
-        if (this._charts[entityId]) {
-          try { this._charts[entityId].destroy(); } catch (e) {}
-          delete this._charts[entityId];
-        }
+        if (this._charts[entityId]) this._charts[entityId].destroy();
+        canvas.style.backgroundColor = theme.bgColor;
+        tile.style.backgroundColor = theme.bgColor;
 
         // Graf typu Větrná růžice
         if (id === 'vitr_smer') {
@@ -876,16 +826,15 @@ class PocasiMeteoCard extends HTMLElement {
 
           const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
 
-          // ensure aspectRatio:1 so polarArea stays square inside canvas
           this._charts[entityId] = new Chart(ctx, {
             type: 'polarArea',
-            data: { labels: WIND_DIR_LABELS, datasets: [{ data: bins }] },
+            data: { labels: [], datasets: [] },
             options: {
               responsive: false,
               maintainAspectRatio: false,
               aspectRatio: 1,
-              layout: { padding: { top: 6, bottom: 6, left: 6, right: 6 } },
-              scales: { r: { ticks: { display: false }, grid: { display: false }, beginAtZero: true } },
+              layout: { padding: { top: 20, bottom: 20, left: 10, right: 10 }},
+              scales: { r: { ticks: { display: false }, grid: { display: false }, beginAtZero: true }},
               plugins: { tooltip: {}, legend: { display: false } }
             },
             plugins: [windRosePlugin]
@@ -896,24 +845,38 @@ class PocasiMeteoCard extends HTMLElement {
             '<div class="pm-legend-item"><span class="pm-legend-color" style="background:#0000ff;"></span><span>Mode: ' + mode.toFixed(0) + '°</span></div>' +
             '<div class="pm-legend-item"><span class="pm-legend-color" style="background:rgba(255,165,0,0.8);"></span><span>Var: ±' + vari.toFixed(0) + '°</span></div>';
         } else {
-        // Standardní čárové a schodovité grafy čidel
-        const { min, max } = computeMinMax(points);
-        const sState = hass.states[entityId];
-        const color = sState ? (sState.attributes.graph_color || '#3b82f6') : '#3b82f6';
-        const sensorStyle = sState?.attributes?.graph_style || 'smooth';
+          // Standardní čárové a schodovité grafy čidel
+          const { min, max } = computeMinMax(points);
+          const sState = hass.states[entityId];
+          const color = sState ? (sState.attributes.graph_color || '#3b82f6') : '#3b82f6';
+          const sensorStyle = sState?.attributes?.graph_style || 'smooth';
 
-        const sStateForTs = hass.states[entityId];
-        const apiLastMitTs = sStateForTs && sStateForTs.attributes && sStateForTs.attributes.timestamp ? Date.parse(sStateForTs.attributes.timestamp) : Date.now();
+          const sStateForTs = hass.states[entityId];
+          const apiLastMitTs = sStateForTs && sStateForTs.attributes && sStateForTs.attributes.timestamp ? Date.parse(sStateForTs.attributes.timestamp) : Date.now();
 
-        // create line chart using createLineChartConfig
-        this._charts[entityId] = new Chart(
-          ctx,
-          createLineChartConfig(points, prettyName, color, theme.textColor, id, sensorStyle, apiLastMitTs)
-        );
+          this._charts[entityId] = new Chart(
+            ctx,
+            createLineChartConfig(points, prettyName, color, theme.textColor, id, sensorStyle, apiLastMitTs)
+          );
+
+          legend.innerHTML = 
+            '<div class="pm-legend-item"><span class="pm-legend-color" style="background:red;"></span><span>Min: ' + min.toFixed(1) + '</span></div>' +
+            '<div class="pm-legend-item"><span class="pm-legend-color" style="background:green;"></span><span>Max: ' + max.toFixed(1) + '</span></div>';
         }
       }
     }
   }
+  
+  getCardSize() { return 6; }
 }
 
+// Registrace karty do vlastních HTML elementů prohlížeče
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
+
+// Registrace karty do HACS / Lovelace katalogu karet pro pohodlný výběr v UI editoru
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'pocasimeteo-card',
+  name: 'PočasíMeteo Card',
+  description: 'Automatické grafy pro PočasíMeteo.cz'
+});
