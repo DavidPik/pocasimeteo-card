@@ -107,13 +107,23 @@ function buildWindRose(points) {
 function historyToPoints(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.map(p => {
-    const ts = p.last_changed || p.last_updated;
-    const val = Number(p.state);
+    // 1. WebSocket používá 'lu', staré REST 'last_changed'/'last_updated'
+    const rawTs = p.lu || p.last_changed || p.last_updated;
+    
+    // 2. WebSocket používá 's', staré REST 'state'
+    const rawState = p.s !== undefined ? p.s : p.state;
 
-    if (!ts || isNaN(val)) return null;
+    if (!rawTs || rawState === undefined) return null;
+
+    // 3. Pokud je timestamp číslo (sekundy), vynásobíme ho 1000 na milisekundy. 
+    // Pokud je to ISO řetězec, Date.parse ho zpracuje standardně.
+    const ts = typeof rawTs === 'number' ? rawTs * 1000 : Date.parse(rawTs);
+    const val = Number(rawState);
+
+    if (isNaN(ts) || isNaN(val)) return null;
 
     return {
-      x: Date.parse(ts),
+      x: ts,
       y: val
     };
   }).filter(p => p && !isNaN(p.x) && !isNaN(p.y));
@@ -719,23 +729,25 @@ class PocasiMeteoCard extends HTMLElement {
 
     await Promise.all(activeEntityIds.map(async entityId => {
       try {
-        const url =
-          `/api/history/period/${since}` +
-          `?filter_entity_id=${entityId}` +
-          `&minimal_response=false` +
-          `&significant_changes_only=false`;
+        // Použití nativního WebSocket příkazu 'history/stream' nebo 'history/history_during_period'
+        const resp = await hass.callWS({
+          type: "history/history_during_period",
+          start_time: since,
+          end_time: new Date().toISOString(),
+          entity_ids: [entityId],
+          minimal_response: false,
+          significant_changes_only: false,
+          no_attributes: true
+        });
 
-        const resp = await hass.callApi("GET", url);
-
-        // REST API vrací pole entit → vezmeme první
-        history[entityId] = Array.isArray(resp) && resp.length > 0 ? resp[0] : [];
+        // WebSocket vrací objekt, kde klíčem je entity_id a hodnotou pole stavů
+        history[entityId] = resp && resp[entityId] ? resp[entityId] : [];
 
       } catch (e) {
-        console.error("REST history error for", entityId, e);
+        console.error("WebSocket history error for", entityId, e);
         history[entityId] = [];
       }
     }));
-
 
     const host = this.shadowRoot.host;
     const theme = computeTheme(host);
