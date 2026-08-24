@@ -552,9 +552,9 @@ class PocasiMeteoCard extends HTMLElement {
         .pm-header-details { display:flex; flex-direction:column; gap:6px; font-size:15px; opacity:0.85; text-align:right; padding-right:12px; min-width:260px; white-space:nowrap; }
         .pm-primary-section { background:rgba(255,255,255,0.03); padding:16px; border-bottom:1px solid rgba(255,255,255,0.1); }
         .pm-secondary-section { background:rgba(255,255,255,0.05); padding:16px; }
-        .pm-graphs { display:flex; flex-wrap:wrap; gap:16px; margin-top:8px; align-items:flex-start; }
-        .pm-graph-tile { box-sizing:border-box; flex: 0 0 auto; background:var(--ha-card-background,#1c1c1c); border-radius:12px; padding:4px; box-shadow:var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display:flex; flex-direction:column; }
-        .pm-graph-title { font-size:1em; font-weight:600; margin-bottom:4px; padding: 4px; }
+        .pm-graphs { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; align-items: stretch; width: 100%; box-sizing: border-box; }
+        .pm-graph-tile { box-sizing: border-box; flex: 0 0 auto; background: var(--ha-card-background,#1c1c1c); border-radius: 12px; padding: 8px; box-shadow: var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+        .pm-graph-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; padding: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
         .pm-graph { width:100%; height:220px; }
         .pm-legend { margin-top:0px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:14px; opacity:0.8; padding: 4px; }
         .pm-legend-item { display:flex; align-items:center; gap:4px; }
@@ -675,10 +675,14 @@ class PocasiMeteoCard extends HTMLElement {
       { type: 'secondary', container: secondaryGraphs }
     ];
 
+    // ARCHITEKTURA FRONTENDU: Výpočet šířky dlaždic s odečtením postranního paddingu karty (32px)
     const containerWidth = this.getBoundingClientRect().width;
-    const graphsPerRow = Number(this.config.graphs_per_row) || 2;
+    const graphsPerRow = Math.max(1, Number(this.config.graphs_per_row) || 2);
     const gap = 16;
-    const tileWidthPx = Math.floor((containerWidth - (graphsPerRow - 1) * gap) / graphsPerRow);
+    
+    // Bezpečný výpočet čisté dostupné šířky pro flex mřížku
+    const usableWidth = containerWidth > 32 ? containerWidth - 32 : containerWidth;
+    const tileWidthPx = Math.floor((usableWidth - (graphsPerRow - 1) * gap) / graphsPerRow);
 
     // 1. KROK: HTML skelet + canvas (beze změny)
     for (const section of targetSections) {
@@ -717,8 +721,15 @@ class PocasiMeteoCard extends HTMLElement {
 
         section.container.appendChild(tile);
 
-        let cssWidthPx = tileWidthPx - 8;
-        let cssHeightPx = s.id === 'vitr_smer' ? tileWidthPx : Math.round(0.5 * tileWidthPx);
+        let cssWidthPx = tileWidthPx - 16; // Kompenzace vnitřního paddingu dláždice
+        
+        // Pojistka pro výšku: Větrná růžice nesmí být vyšší než 240px ani nižší než 140px
+        let cssHeightPx = Math.round(0.55 * tileWidthPx);
+        if (s.id === 'vitr_smer') {
+          cssHeightPx = Math.min(240, Math.max(140, tileWidthPx));
+        } else {
+          cssHeightPx = Math.min(200, Math.max(120, cssHeightPx));
+        }
 
         canvas.style.display = 'block';
         canvas.style.width = Math.round(cssWidthPx) + 'px';
