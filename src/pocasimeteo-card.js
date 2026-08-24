@@ -168,8 +168,9 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId, se
     max = sensorAttrs.stats_max;
 
     if (points && points.length > 0) {
-      minPoint = points.reduce((acc, p) => (p.y === min ? p : acc), null);
-      maxPoint = points.reduce((acc, p) => (p.y === max ? p : acc), null);
+      // Bezpečné vyhledání bodů s tolerancí 0.01 kvůli floating-point nepřesnostem v JS
+      minPoint = points.reduce((acc, p) => (Math.abs(p.y - min) < 0.01 ? p : acc), null);
+      maxPoint = points.reduce((acc, p) => (Math.abs(p.y - max) < 0.01 ? p : acc), null);
     }
   }
 
@@ -229,6 +230,17 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId, se
 }
 
 /**
+ * ARCHITEKTURA FRONTENDU: Vypočítá střed a poloměr pro kruhový graf větrné růžice.
+ * Řeší chybějící referenci computeChartGeometry a opravuje pád po vykreslení.
+ */
+function computeChartGeometry(chartArea) {
+  const cx = chartArea.left + chartArea.width / 2;
+  const cy = chartArea.top + chartArea.height / 2;
+  const R = Math.min(chartArea.width, chartArea.height) / 2;
+  return { cx, cy, R };
+}
+
+/**
  * ARCHITEKTURA FRONTENDU: Vlastní Canvas plugin pro detailní vykreslení větrné růžice.
  * Data pro avg/mode/var bere z atributů senzoru směru větru (backend).
  */
@@ -240,7 +252,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       canvas.addEventListener('mousemove', (ev) => {
         const rect = canvas.getBoundingClientRect();
         chart.$mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-        const { cx, cy, R } = computeChartGeometry(chart.chartArea);
+        const { cx, cy, R } = computeChartGeometry(chart.chartArea || chart);
         const dx = chart.$mouse.x - cx;
         const dy = chart.$mouse.y - cy;
         const dist = Math.sqrt(dx * dx + dy * dy);
