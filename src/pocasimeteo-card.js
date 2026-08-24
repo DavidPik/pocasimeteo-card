@@ -207,7 +207,12 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId, se
           ticks: { color: textColor }, 
           grid: { color: GRID_COLOR } 
         },
-        y: { min: yMinAxis, ticks: { color: textColor }, grid: { color: GRID_COLOR } }
+        y: {
+          min: typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : yMinAxis,
+          max: typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : undefined,
+          ticks: { color: textColor },
+          grid: { color: GRID_COLOR }
+        }
       }
     }
   };
@@ -714,21 +719,16 @@ class PocasiMeteoCard extends HTMLElement {
     await Promise.all(activeEntityIds.map(async entityId => {
       try {
         const wsData = await hass.callWS({
-          type: "history/history",
+          type: "history/list",
+          entity_id: entityId,
           start_time: since,
           end_time: new Date().toISOString(),
-          entity_ids: [entityId],
           minimal_response: false,
-          no_attributes: false,
-          include_start_time: true
+          significant_changes_only: false
         });
 
-        // WebSocket API vrací pole [ [states...] ] – vezmeme první sadu
-        if (Array.isArray(wsData) && wsData.length > 0) {
-          history[entityId] = wsData[0];
-        } else {
-          history[entityId] = [];
-        }
+        // WebSocket API vrací přímo pole stavů
+        history[entityId] = wsData;
 
       } catch (e) {
         console.error("WS history error for", entityId, e);
@@ -784,11 +784,15 @@ class PocasiMeteoCard extends HTMLElement {
         tile.style.backgroundColor = theme.bgColor;
 
         if (id === 'vitr_smer') {
-          const bins = buildWindRose(points);
+          const bins = points.length > 0 ? buildWindRose(points) : new Array(16).fill(0);
           const avg = typeof sensorAttrs.vitr_smer_avg === 'number' ? sensorAttrs.vitr_smer_avg : 0;
           const mode = typeof sensorAttrs.vitr_smer_mode === 'number' ? sensorAttrs.vitr_smer_mode : 0;
           const vari = typeof sensorAttrs.vitr_smer_var === 'number' ? sensorAttrs.vitr_smer_var : 0;
 
+          if (this._charts[entityId]) this._charts[entityId].destroy();
+          canvas.style.backgroundColor = theme.bgColor;
+          tile.style.backgroundColor = theme.bgColor;
+          
           this._charts[entityId] = new Chart(canvas.getContext('2d'), {
             type: 'polarArea',
             data: {
@@ -828,6 +832,8 @@ class PocasiMeteoCard extends HTMLElement {
               <span>Rozptyl (variance)</span>
             </div>
           `;
+
+          continue;
         } else {
           this._charts[entityId] = new Chart(
             canvas.getContext('2d'),
