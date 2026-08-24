@@ -131,44 +131,6 @@ function hexToRgba(hex, alpha) {
 }
 
 /**
- * ARCHITEKTURA FRONTENDU: Bezpečně komunikuje s REST rozhraním Home Assistenta.
- * Automaticky získává přístupový token z objektu `hass` (kompatibilní se staršími i moderními verzemi HA)
- * a obsahuje retry mechanismus, pokud token během nečinnosti vyprší.
- */
-async function fetchWithRetry(url, hass, options = {}, retry = true) {
-  const getToken = () =>
-    hass.connection?.options?.accessToken ||
-    hass.auth?.data?.access_token ||
-    null;
-
-  let token = getToken();
-  if (!token) {
-    throw new Error('Missing access token');
-  }
-
-  let resp = await fetch(url, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      Authorization: `Bearer ${token}`,
-    },
-    credentials: 'same-origin',
-  });
-
-  if (resp.status === 401 && retry) {
-    // Pokud token expiroval, počkáme 1.5s na jeho vnitřní obnovu v HA jádru a zkusíme znovu
-    await new Promise(r => setTimeout(r, 1500));
-    token = getToken();
-    if (!token) {
-      throw new Error('Missing access token after retry');
-    }
-    return fetchWithRetry(url, hass, options, false);
-  }
-
-  return resp;
-}
-
-/**
  * ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Vytvoří konfiguraci pro čárový graf Chart.js.
  * Min/max bere z atributů senzoru (spočíta backend), osa X se řídí intervalem ze weather entity.
  */
@@ -736,15 +698,21 @@ class PocasiMeteoCard extends HTMLElement {
     // 2. KROK: syrová historie z Recorderu (bez bucketů)
     const activeEntityIds = Object.keys(canvases);
     await Promise.all(activeEntityIds.map(async entityId => {
-      const url = '/api/history/period/' + since + '?filter_entity_id=' + entityId + '&minimal_response&significant_changes_only=false';
-
       try {
-        const resp = await fetchWithRetry(url, hass, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
+        const wsData = await hass.callWS({
+          type: "history/list",
+          entity_id: entityId,
+          start_time: since,
+          end_time: new Date().toISOString(),
+          minimal_response: true
         });
-        if (resp.ok) history[entityId] = await resp.json();
-      } catch (e) {}
+
+        // WebSocket API vrací přímo pole bodů
+        history[entityId] = [wsData];
+
+      } catch (e) {
+        console.error("WS history error for", entityId, e);
+      }
     }));
 
     const host = this.shadowRoot.host;
