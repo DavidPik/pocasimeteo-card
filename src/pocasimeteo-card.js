@@ -424,6 +424,15 @@ class PocasiMeteoCard extends HTMLElement {
   connectedCallback() {
     // Sledování změn velikosti kontejneru pro automatický responzivní přepočet rozměrů grafů
     this._resizeObserver = new ResizeObserver(() => {
+      if (!this._initialResizeDone) {
+        this._initialResizeDone = true;
+        const entity = this._currentHass.states[this.config.entity];
+        if (entity) {
+          this._updateCharts(this._currentHass, entity);
+        }
+        return;
+      }
+      // další resize eventy
       if (this._currentHass && this._initialized && !this._rendering) {
         const entity = this._currentHass.states[this.config.entity];
         if (entity && entity.attributes && entity.attributes.sensors) {
@@ -488,9 +497,12 @@ class PocasiMeteoCard extends HTMLElement {
     this._lastApiTimestamp = currentApiTimestamp;
     this._lastFetch = nowTs;
 
-    this._updateCharts(hass, entity).finally(() => { 
-      this._rendering = false; 
-    });
+    setTimeout(() => {
+      this._updateCharts(hass, entity).finally(() => {
+        this._rendering = false;
+      });
+    }, 50);
+
   }
   
   /**
@@ -633,8 +645,7 @@ class PocasiMeteoCard extends HTMLElement {
       { type: 'secondary', container: secondaryGraphs }
     ];
 
-    const containerRect = primaryGraphs.getBoundingClientRect();
-    const containerWidth = containerRect.width || this.getBoundingClientRect().width || 400;
+    const containerWidth = this.getBoundingClientRect().width;
     const graphsPerRow = Number(this.config.graphs_per_row) || 2;
     const gap = 16;
     const tileWidthPx = Math.floor((containerWidth - (graphsPerRow - 1) * gap) / graphsPerRow);
