@@ -716,25 +716,26 @@ class PocasiMeteoCard extends HTMLElement {
 
     // 2. KROK: syrová historie z Recorderu přes WebSocket API
     const activeEntityIds = Object.keys(canvases);
+
     await Promise.all(activeEntityIds.map(async entityId => {
       try {
-        const wsData = await hass.callWS({
-          type: "history/list",
-          entity_id: entityId,
-          start_time: since,
-          end_time: new Date().toISOString(),
-          minimal_response: false,
-          significant_changes_only: false
-        });
+        const url =
+          `/api/history/period/${since}` +
+          `?filter_entity_id=${entityId}` +
+          `&minimal_response=false` +
+          `&significant_changes_only=false`;
 
-        // WebSocket API vrací přímo pole stavů
-        history[entityId] = wsData;
+        const resp = await hass.callApi("GET", url);
+
+        // REST API vrací pole entit → vezmeme první
+        history[entityId] = Array.isArray(resp) && resp.length > 0 ? resp[0] : [];
 
       } catch (e) {
-        console.error("WS history error for", entityId, e);
+        console.error("REST history error for", entityId, e);
         history[entityId] = [];
       }
     }));
+
 
     const host = this.shadowRoot.host;
     const theme = computeTheme(host);
