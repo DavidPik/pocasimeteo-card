@@ -102,6 +102,7 @@ function buildWindRose(points) {
 /**
  * ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Transformuje syrová data z HA API historie
  * (objekty se stavy last_changed/last_updated a state) na pole souřadnic [x, y] pro Chart.js.
+ * Používá přímo surové body z Recorderu (bez bucketů).
  */
 function historyToPoints(raw) {
   if (!Array.isArray(raw)) return [];
@@ -116,33 +117,6 @@ function historyToPoints(raw) {
       y: val
     };
   }).filter(p => p && !isNaN(p.x) && !isNaN(p.y));
-}
-
-/**
- * Vypočítá extrémy (minimum a maximum) z pole bodů pro zobrazení v grafech.
- */
-function computeMinMax(points) {
-  if (!points || points.length === 0) return { min: 0, max: 0, minPoint: null, maxPoint: null };
-  const ys = points.map(p => p.y);
-  const min = Math.min(...ys);
-  const max = Math.max(...ys);
-  return {
-    min, max,
-    minPoint: points.find(p => p.y === min),
-    maxPoint: points.find(p => p.y === max)
-  };
-}
-
-/**
- * Vypočítá středy a poloměr pro ručně vykreslovanou větrnou růžici uvnitř Canvasu.
- */
-function computeChartGeometry(chartArea) {
-  const cx = (chartArea.left + chartArea.right) / 2;
-  const cy = (chartArea.top + chartArea.bottom) / 2;
-  const aw = chartArea.right - chartArea.left;
-  const ah = chartArea.bottom - chartArea.top;
-  const R = Math.min(aw, ah) * 0.50;
-  return { cx, cy, aw, ah, R };
 }
 
 /**
@@ -193,13 +167,12 @@ async function fetchWithRetry(url, hass, options = {}, retry = true) {
 
   return resp;
 }
+
 /**
  * ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Vytvoří konfiguraci pro čárový graf Chart.js.
- * Na základě parametrů z backendu (color, style) určuje, zda bude graf hladký (smooth)
- * nebo schodovitý (stepped) – např. pro srážky a rychlost větru, jak definuje backend v const.py.
+ * Min/max bere z atributů senzoru (spočíta backend), osa X se řídí intervalem ze weather entity.
  */
-function createLineChartConfig(points, cleanName, color, textColor, sensorId, sensorStyle, lastUpdateTs) {
-  const { min, max, minPoint, maxPoint } = computeMinMax(points);
+function createLineChartConfig(points, cleanName, color, textColor, sensorId, sensorStyle, lastUpdateTs, statsIntervalHours, sensorAttrs) {
   const rgba = hexToRgba(color, 0.25);
 
   const nameLower = cleanName.toLowerCase();
@@ -209,7 +182,24 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId, se
 
   // Fixace osy X: konec je čas z API (nouzově aktuální čas v prohlížeči)
   const endX = lastUpdateTs && !isNaN(lastUpdateTs) ? lastUpdateTs : Date.now();
-  const startX = endX - 24 * 3600 * 1000;
+  const intervalMs = (statsIntervalHours && statsIntervalHours > 0 ? statsIntervalHours : 24) * 3600 * 1000;
+  const startX = endX - intervalMs;
+
+  // Min/max z atributů senzoru (backend)
+  let min = 0;
+  let max = 0;
+  let minPoint = null;
+  let maxPoint = null;
+
+  if (sensorAttrs && typeof sensorAttrs.min === 'number' && typeof sensorAttrs.max === 'number') {
+    min = sensorAttrs.min;
+    max = sensorAttrs.max;
+
+    if (points && points.length > 0) {
+      minPoint = points.reduce((acc, p) => (p.y === min ? p : acc), null);
+      maxPoint = points.reduce((acc, p) => (p.y === max ? p : acc), null);
+    }
+  }
 
   return {
     type: 'line',
@@ -263,8 +253,7 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId, se
 
 /**
  * ARCHITEKTURA FRONTENDU: Vlastní Canvas plugin pro detailní vykreslení větrné růžice.
- * Obsahuje matematické zachycení pohybu myši (mousemove) nad jednotlivými kruhovými výsečemi
- * a počítá úhly k určení, nad kterým ze 16 směrů se uživatel právě nachází.
+ * Data pro avg/mode/var bere z atributů senzoru směru větru (backend).
  */
 function createWindRosePlugin(theme, bins, avg, mode, vari) {
   return {
@@ -357,7 +346,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         const y = cy + Math.sin(angle) * offsetText;
         ctx.fillText(label, x, y);
       });
-      // Pokračování metody afterDraw uvnitř větrné růžice
+
       const avgLineLen = R - 5;    
       const modeLineLen = R - 25;  
       const offsetVar = R - 10;    
@@ -368,7 +357,6 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       const endVar = (avg + vari - 90) * Math.PI / 180;
 
       // ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Vykreslení rozptylu (variance) větru.
-      // Data pocházejí z atributů senzoru směru větru, které spočítal backend v coordinator.py.
       ctx.fillStyle = 'rgba(255,165,0,0.22)';
       ctx.beginPath();
       ctx.moveTo(cx, cy);
@@ -394,7 +382,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       ctx.lineTo(cx + Math.cos(modeAngle) * modeLineLen, cy + Math.sin(modeAngle) * modeLineLen);
       ctx.stroke();
 
-      // Ruční vykreslení stínovaného okna tooltipu při interakci myši nad sektorem růžice
+      // Ruční vykreslení tooltipu
       if (chart.$windHover && chart.$mouse) {
         const { index, value } = chart.$windHover;
         const { x: mx, y: my } = chart.$mouse;
@@ -589,8 +577,6 @@ class PocasiMeteoCard extends HTMLElement {
 
   /**
    * ARCHITEKTURA FRONTENDU: Bezpečně aktualizuje texty v záhlaví karty.
-   * Převádí nativní rychlosti z weather entity (km/h) zpět na m/s pomocí parseFloat,
-   * čímž sjednocuje zobrazení v záhlaví s osami grafů na dashboardu.
    */
   _updateVisualHeader(entity) {
     const d = entity.attributes;
@@ -599,7 +585,6 @@ class PocasiMeteoCard extends HTMLElement {
     const headerMain = this.shadowRoot.getElementById('header-main');
     const headerDetails = this.shadowRoot.getElementById('header-details');
 
-    // Slovník pro srozumitelné české popisky stavů počasí
     const conditionTranslations = {
       'sunny': 'Slunečno',
       'clear-night': 'Jasno',
@@ -621,19 +606,15 @@ class PocasiMeteoCard extends HTMLElement {
     const stateText = conditionTranslations[rawState] || rawState; 
     const lokalita = d.lokalita_stanice || d.friendly_name || 'Meteostanice';
 
-    // 1. Vyplnění horního řádku (Název a čas aktualizace z API)
     headerTitle.textContent = lokalita + ' — ' + stateText;
     headerTimestamp.textContent = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
     
-    // 2. Vyplnění dominantní teploty
     const temp = entity.attributes.temperature !== undefined ? entity.attributes.temperature : '--';
     headerMain.textContent = temp + ' °C';
 
-    // 3. Načtení veličin pro pravý panel detailů
     const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
     const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
     
-    // PŘEPOČET NA M/S s opravou na parseFloat:
     const windSpeedRaw = entity.attributes.wind_speed;
     let windSpeed = '--';
     if (windSpeedRaw !== undefined && windSpeedRaw !== null) {
@@ -646,18 +627,15 @@ class PocasiMeteoCard extends HTMLElement {
       windGust = (parseFloat(gustRaw) / 3.6).toFixed(1);
     }
     
-    // Přepočet stupňů na textový směr (např. WSW) pomocí vnitřní funkce degToDirection
     const bearingRaw = entity.attributes.wind_bearing;
     let windDirectionText = '';
     if (bearingRaw !== undefined && bearingRaw !== null) {
       windDirectionText = ' ' + degToDirection(bearingRaw);
     }
     
-    // Sestavení výsledného textu větru v jednotkách m/s
     const kompletniVitrText = windSpeed + ' / ' + windGust + ' m/s' + windDirectionText;
     const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
 
-    // 4. Vyplnění detailů v původní stabilní struktuře s jednotkami m/s
     headerDetails.innerHTML = 
       '<div>Tlak vzduchu: ' + pressure + ' hPa</div>' +
       '<div>Vlhkost: ' + humidity + ' %</div>' +
@@ -667,7 +645,7 @@ class PocasiMeteoCard extends HTMLElement {
 
   /**
    * ARCHITEKTURA FRONTENDU: Načte historii pro aktivní čidla a vykreslí grafy.
-   * Pro každé čidlo z pole d.sensors stahuje historii za posledních 24 hodin zvlášť.
+   * Historii bere jako syrové body z Recorderu, statistiky z atributů senzorů.
    */
   async _updateCharts(hass, entity) {
     const d = entity.attributes;
@@ -681,7 +659,8 @@ class PocasiMeteoCard extends HTMLElement {
 
     if (this.config.show_graphs === false || sensorsMeta.length === 0) return;
 
-    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const statsIntervalHours = typeof d.stats_interval_hours === 'number' ? d.stats_interval_hours : 24;
+    const since = new Date(Date.now() - statsIntervalHours * 3600 * 1000).toISOString();
     const canvases = {};
     const history = {};
 
@@ -690,14 +669,13 @@ class PocasiMeteoCard extends HTMLElement {
       { type: 'secondary', container: secondaryGraphs }
     ];
 
-    // Výpočet šířky dlaždice na základě parametru graphs_per_row
     const containerRect = primaryGraphs.getBoundingClientRect();
     const containerWidth = containerRect.width || this.getBoundingClientRect().width || 400;
     const graphsPerRow = Number(this.config.graphs_per_row) || 2;
     const gap = 16;
     const tileWidthPx = Math.floor((containerWidth - (graphsPerRow - 1) * gap) / graphsPerRow);
 
-    // 1. KROK: Dynamicky vygenerujeme HTML elementy a Canvas pro každé viditelné čidlo
+    // 1. KROK: HTML skelet + canvas (beze změny)
     for (const section of targetSections) {
       const filteredMeta = sensorsMeta.filter(s =>
         s.type === section.type &&
@@ -734,8 +712,7 @@ class PocasiMeteoCard extends HTMLElement {
 
         section.container.appendChild(tile);
 
-        // --- START: Výpočet výšky canvasu podle požadavků zadání
-        let cssWidthPx = tileWidthPx - 8; // Odpočet vnitřního paddingu dlaždice (padding: 4px ze všech stran = 8px horizontálně)
+        let cssWidthPx = tileWidthPx - 8;
         let cssHeightPx = s.id === 'vitr_smer' ? tileWidthPx : Math.round(0.5 * tileWidthPx);
 
         canvas.style.display = 'block';
@@ -749,16 +726,15 @@ class PocasiMeteoCard extends HTMLElement {
         canvas.width = Math.round(cssWidthPx * _dpr);
         canvas.height = Math.round(cssHeightPx * _dpr);
         ctx.scale(_dpr, _dpr);
-        // --- END
 
         canvases[s.entity_id] = { canvas, tile, prettyName, legend, id: s.id };
       }
     }
 
-    // 2. KROK: Paralelně stáhneme historii z HA pro všechna vygenerovaná čidla najednou
+    // 2. KROK: syrová historie z Recorderu (bez bucketů)
     const activeEntityIds = Object.keys(canvases);
     await Promise.all(activeEntityIds.map(async entityId => {
-      const url = '/api/history/period/' + since + '?filter_entity_id=' + entityId + '&minimal_response&significant_changes_only=false';
+      const url = '/api/history/period/' + since + '?filter_entity_id=' + entityId + '&significant_changes_only=false';
       try {
         const resp = await fetchWithRetry(url, hass, {
           method: 'GET',
@@ -771,16 +747,21 @@ class PocasiMeteoCard extends HTMLElement {
     const host = this.shadowRoot.host;
     const theme = computeTheme(host);
 
-    // 3. KROK: Inicializujeme jednotlivé grafy Chart.js nad staženými daty
+    // 3. KROK: vykreslení grafů
     for (const entityId of activeEntityIds) {
       const item = canvases[entityId];
       if (!item) continue;
 
-      // Pokud historie chybí, vytvoříme statický bod z aktuálního stavu čidla
-      if (!history[entityId] || !history[entityId][0] || !history[entityId][0].length) {
-        const sState = hass.states[entityId];
-        if (!sState) continue;
+      const sState = hass.states[entityId];
+      if (!sState) continue;
 
+      const sensorAttrs = sState.attributes || {};
+      const sensorStyle = sensorAttrs.graph_style || 'smooth';
+      const sensorColor = sensorAttrs.graph_color || '#3b82f6';
+      const apiLastTs = sensorAttrs.timestamp ? Date.parse(sensorAttrs.timestamp) : Date.now();
+
+      // fallback: bez historie – dva body
+      if (!history[entityId] || !history[entityId][0] || !history[entityId][0].length) {
         const val = Number(sState.state);
         if (isNaN(val)) continue;
 
@@ -790,13 +771,10 @@ class PocasiMeteoCard extends HTMLElement {
           { x: now, y: val }
         ];
 
-        const sStateFallback = hass.states[entityId];
-        const apiLastMitTsFallback = sStateFallback && sStateFallback.attributes && sStateFallback.attributes.timestamp ? Date.parse(sStateFallback.attributes.timestamp) : Date.now();
-
         if (this._charts[entityId]) this._charts[entityId].destroy();
         this._charts[entityId] = new Chart(
-          canvases[entityId].canvas.getContext('2d'),
-          createLineChartConfig(points, canvases[entityId].prettyName, '#3b82f6', theme.textColor, canvases[entityId].id, 'smooth', apiLastMitTsFallback)
+          item.canvas.getContext('2d'),
+          createLineChartConfig(points, item.prettyName, sensorColor, theme.textColor, item.id, sensorStyle, apiLastTs, statsIntervalHours, sensorAttrs)
         );
         continue;
       }
@@ -806,77 +784,68 @@ class PocasiMeteoCard extends HTMLElement {
         points.push({ x: Date.now(), y: points[0].y });
       }
       
-      // Pokračujeme pouze pokud máme v poli 2 nebo více bodů
       if (points.length > 1) {
         const { canvas, tile, prettyName, legend, id } = item;
-        const ctx = canvas.getContext('2d');
 
         if (this._charts[entityId]) this._charts[entityId].destroy();
         canvas.style.backgroundColor = theme.bgColor;
         tile.style.backgroundColor = theme.bgColor;
 
-        // Graf typu Větrná růžice
         if (id === 'vitr_smer') {
           const bins = buildWindRose(points);
-          const sState = hass.states[entityId];
+          const avg = typeof sensorAttrs.vitr_smer_avg === 'number' ? sensorAttrs.vitr_smer_avg : 0;
+          const mode = typeof sensorAttrs.vitr_smer_mode === 'number' ? sensorAttrs.vitr_smer_mode : 0;
+          const vari = typeof sensorAttrs.vitr_smer_var === 'number' ? sensorAttrs.vitr_smer_var : 0;
 
-          const avg = sState ? Number(sState.attributes.vitr_smer_avg ?? 0) : 0;
-          const mode = sState ? Number(sState.attributes.vitr_smer_mode ?? 0) : 0;
-          const vari = sState ? Number(sState.attributes.vitr_smer_var ?? 0) : 0;
-
-          const windRosePlugin = createWindRosePlugin(theme, bins, avg, mode, vari);
-
-          this._charts[entityId] = new Chart(ctx, {
+          this._charts[entityId] = new Chart(canvas.getContext('2d'), {
             type: 'polarArea',
-            data: { labels: [], datasets: [] },
+            data: {
+              labels: WIND_DIR_LABELS,
+              datasets: [{
+                data: bins,
+                backgroundColor: hexToRgba('#009688', 0.85),
+                borderColor: '#004d40',
+                borderWidth: 1
+              }]
+            },
             options: {
               responsive: false,
               maintainAspectRatio: false,
-              aspectRatio: 1,
-              layout: { padding: { top: 20, bottom: 20, left: 10, right: 10 }},
-              scales: { r: { ticks: { display: false }, grid: { display: false }, beginAtZero: true }},
-              plugins: { tooltip: {}, legend: { display: false } }
+              plugins: { legend: { display: false }, tooltip: { enabled: false } },
+              scales: {
+                r: {
+                  ticks: { display: false },
+                  grid: { color: GRID_COLOR }
+                }
+              }
             },
-            plugins: [windRosePlugin]
+            plugins: [createWindRosePlugin(theme, bins, avg, mode, vari)]
           });
 
-          legend.innerHTML = 
-            '<div class="pm-legend-item"><span class="pm-legend-color" style="background:#ff0000;"></span><span>Avg: ' + avg.toFixed(0) + '°</span></div>' +
-            '<div class="pm-legend-item"><span class="pm-legend-color" style="background:#0000ff;"></span><span>Mode: ' + mode.toFixed(0) + '°</span></div>' +
-            '<div class="pm-legend-item"><span class="pm-legend-color" style="background:rgba(255,165,0,0.8);"></span><span>Var: ±' + vari.toFixed(0) + '°</span></div>';
+          legend.innerHTML = `
+            <div class="pm-legend-item">
+              <span class="pm-legend-color" style="background:#ff0000;"></span>
+              <span>Průměrný směr větru</span>
+            </div>
+            <div class="pm-legend-item">
+              <span class="pm-legend-color" style="background:#0000ff;"></span>
+              <span>Převládající směr (mod)</span>
+            </div>
+            <div class="pm-legend-item">
+              <span class="pm-legend-color" style="background:#ffa500;"></span>
+              <span>Rozptyl (variance)</span>
+            </div>
+          `;
         } else {
-          // Standardní čárové a schodovité grafy čidel
-          const { min, max } = computeMinMax(points);
-          const sState = hass.states[entityId];
-          const color = sState ? (sState.attributes.graph_color || '#3b82f6') : '#3b82f6';
-          const sensorStyle = sState?.attributes?.graph_style || 'smooth';
-
-          const sStateForTs = hass.states[entityId];
-          const apiLastMitTs = sStateForTs && sStateForTs.attributes && sStateForTs.attributes.timestamp ? Date.parse(sStateForTs.attributes.timestamp) : Date.now();
-
           this._charts[entityId] = new Chart(
-            ctx,
-            createLineChartConfig(points, prettyName, color, theme.textColor, id, sensorStyle, apiLastMitTs)
+            canvas.getContext('2d'),
+            createLineChartConfig(points, prettyName, sensorColor, theme.textColor, id, sensorStyle, apiLastTs, statsIntervalHours, sensorAttrs)
           );
-
-          legend.innerHTML = 
-            '<div class="pm-legend-item"><span class="pm-legend-color" style="background:red;"></span><span>Min: ' + min.toFixed(1) + '</span></div>' +
-            '<div class="pm-legend-item"><span class="pm-legend-color" style="background:green;"></span><span>Max: ' + max.toFixed(1) + '</span></div>';
+          legend.innerHTML = '';
         }
       }
     }
   }
-  
-  getCardSize() { return 6; }
 }
 
-// Registrace karty do vlastních HTML elementů prohlížeče
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
-
-// Registrace karty do HACS / Lovelace katalogu karet pro pohodlný výběr v UI editoru
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: 'pocasimeteo-card',
-  name: 'PočasíMeteo Card',
-  description: 'Automatické grafy pro PočasíMeteo.cz'
-});
