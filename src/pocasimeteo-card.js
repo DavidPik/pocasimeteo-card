@@ -734,7 +734,8 @@ class PocasiMeteoCard extends HTMLElement {
     // 2. KROK: syrová historie z Recorderu (bez bucketů)
     const activeEntityIds = Object.keys(canvases);
     await Promise.all(activeEntityIds.map(async entityId => {
-      const url = '/api/history/period/' + since + '?filter_entity_id=' + entityId + '&significant_changes_only=false';
+      const url = '/api/history/period/' + since + '?filter_entity_id=' + entityId + '&minimal_response&significant_changes_only=false';
+
       try {
         const resp = await fetchWithRetry(url, hass, {
           method: 'GET',
