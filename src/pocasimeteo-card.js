@@ -466,9 +466,11 @@ class PocasiMeteoCard extends HTMLElement {
         const entity = this._currentHass.states[this.config.entity];
         if (entity && entity.attributes && entity.attributes.sensors) {
           this._rendering = true;
-          this._updateCharts(this._currentHass, entity).finally(() => {
-            this._rendering = false;
-          });
+          setTimeout(() => {
+            this._updateCharts(hass, entity).finally(() => {
+              this._rendering = false;
+            });
+          }, 50);
         }
       }
     });
