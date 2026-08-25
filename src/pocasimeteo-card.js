@@ -722,8 +722,6 @@ class PocasiMeteoCard extends HTMLElement {
 
         section.container.appendChild(tile);
 
-        let cssWidthPx = tileWidthPx - 16; // Kompenzace vnitřního paddingu dláždice
-        
         // Pojistka pro výšku: Větrná růžice nesmí být vyšší než 240px ani nižší než 140px
         let cssWidthPx = tileWidthPx - 16; // Kompenzace vnitřního paddingu dlaždice
         let cssHeightPx = 200; // Výchozí stabilní výška pro čárové grafy
