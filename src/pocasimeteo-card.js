@@ -725,11 +725,16 @@ class PocasiMeteoCard extends HTMLElement {
         let cssWidthPx = tileWidthPx - 16; // Kompenzace vnitřního paddingu dláždice
         
         // Pojistka pro výšku: Větrná růžice nesmí být vyšší než 240px ani nižší než 140px
-        let cssHeightPx = Math.round(0.55 * tileWidthPx);
+        let cssWidthPx = tileWidthPx - 16; // Kompenzace vnitřního paddingu dlaždice
+        let cssHeightPx = 200; // Výchozí stabilní výška pro čárové grafy
+
         if (s.id === 'vitr_smer') {
-          cssHeightPx = Math.min(240, Math.max(140, tileWidthPx));
+          // Větrná růžice potřebuje čtvercový prostor, aby kruh + texty kolem měly místo
+          // Výška se přizpůsobí šířce, ale nepřekročí bezpečné limity
+          cssHeightPx = Math.min(260, Math.max(180, cssWidthPx));
         } else {
-          cssHeightPx = Math.min(200, Math.max(120, cssHeightPx));
+          // Čárové grafy budou mít fixní příjemnou výšku
+          cssHeightPx = 180;
         }
 
         canvas.style.display = 'block';
@@ -844,6 +849,9 @@ class PocasiMeteoCard extends HTMLElement {
             options: {
               responsive: false,
               maintainAspectRatio: false,
+              layout: {
+                padding: 25
+              },
               plugins: { legend: { display: false }, tooltip: { enabled: false } },
               scales: {
                 r: {
@@ -872,6 +880,10 @@ class PocasiMeteoCard extends HTMLElement {
 
           continue;
         } else {
+          // Bezpečné vytažení min/max hodnot z atributů senzoru pro legendu
+          const minVal = typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : 0;
+          const maxVal = typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : 0;
+          
           this._charts[entityId] = new Chart(
             canvas.getContext('2d'),
             createLineChartConfig(points, prettyName, sensorColor, theme.textColor, id, sensorStyle, apiLastTs, statsIntervalHours, sensorAttrs)
@@ -880,11 +892,11 @@ class PocasiMeteoCard extends HTMLElement {
           legend.innerHTML = `
             <div class="pm-legend-item">
               <span class="pm-legend-color" style="background:red;"></span>
-              <span>Min: ${min.toFixed(1)}</span>
+              <span>Min: ${minVal.toFixed(1)}</span>
               </div>
               <div class="pm-legend-item">
               <span class="pm-legend-color" style="background:green;"></span>
-              <span>Max: ${max.toFixed(1)}</span>
+              <span>Max: ${maxVal.toFixed(1)}</span>
               </div>
           `;
         }
