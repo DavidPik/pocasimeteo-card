@@ -676,7 +676,7 @@ class PocasiMeteoCard extends HTMLElement {
     ];
 
     // ARCHITEKTURA FRONTENDU: Výpočet šířky dlaždic s odečtením postranního paddingu karty (32px)
-    const containerWidth = this.getBoundingClientRect().width;
+    const containerWidth = section.container.getBoundingClientRect().width;
     const graphsPerRow = Math.max(1, Number(this.config.graphs_per_row) || 2);
     const gap = 16;
     
@@ -875,7 +875,17 @@ class PocasiMeteoCard extends HTMLElement {
             canvas.getContext('2d'),
             createLineChartConfig(points, prettyName, sensorColor, theme.textColor, id, sensorStyle, apiLastTs, statsIntervalHours, sensorAttrs)
           );
-          legend.innerHTML = '';
+          
+          legend.innerHTML = `
+            <div class="pm-legend-item">
+              <span class="pm-legend-color" style="background:red;"></span>
+              <span>Min: ${min.toFixed(1)}</span>
+              </div>
+              <div class="pm-legend-item">
+              <span class="pm-legend-color" style="background:green;"></span>
+              <span>Max: ${max.toFixed(1)}</span>
+              </div>
+          `;
         }
       }
     }
