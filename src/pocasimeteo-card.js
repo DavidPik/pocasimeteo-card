@@ -676,7 +676,8 @@ class PocasiMeteoCard extends HTMLElement {
     ];
 
     // ARCHITEKTURA FRONTENDU: Výpočet šířky dlaždic s odečtením postranního paddingu karty (32px)
-    const containerWidth = section.container.getBoundingClientRect().width;
+    const card = this.shadowRoot.querySelector('.pm-card');
+    const containerWidth = card.getBoundingClientRect().width;
     const graphsPerRow = Math.max(1, Number(this.config.graphs_per_row) || 2);
     const gap = 16;
     
