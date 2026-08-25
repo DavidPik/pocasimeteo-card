@@ -144,47 +144,63 @@ function hexToRgba(hex, alpha) {
  * ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Vytvoří konfiguraci pro čárový graf Chart.js.
  * Min/max bere z atributů senzoru (spočíta backend), osa X se řídí intervalem ze weather entity.
  */
-function createLineChartConfig(points, cleanName, color, textColor, sensorId, sensorStyle, lastUpdateTs, statsIntervalHours, sensorAttrs) {
-  const rgba = hexToRgba(color, 0.25);
+function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsIntervalHours) {
+  // Barva grafu a styl (smooth/stepped) se berou přímo z atributů senzoru
+  const color = sensorAttrs.graph_color || '#3b82f6';
+  const isStepped = sensorAttrs.graph_style === 'stepped';
 
-  const nameLower = cleanName.toLowerCase();
-  const isDynamic = nameLower.includes('teplota') || nameLower.includes('tlak');
-  const yMinAxis = isDynamic ? undefined : 0;
-  const isStepped = sensorStyle === 'stepped';
+  // Barva textu z motivu karty
+  const textColor = theme.textColor;
 
-  // Fixace osy X: konec je čas z API (nouzově aktuální čas v prohlížeči)
-  const endX = lastUpdateTs && !isNaN(lastUpdateTs) ? lastUpdateTs : Date.now();
-  const intervalMs = (statsIntervalHours && statsIntervalHours > 0 ? statsIntervalHours : 24) * 3600 * 1000;
+  // Fixace osy X podle timestampu senzoru
+  const lastUpdateTs = sensorAttrs.timestamp
+    ? Date.parse(sensorAttrs.timestamp)
+    : Date.now();
+
+  const intervalMs = (statsIntervalHours || 24) * 3600 * 1000;
+  const endX = lastUpdateTs;
   const startX = endX - intervalMs;
 
-  // Min/max z atributů senzoru (backend – stats_min/stats_max)
-  let min = 0;
-  let max = 0;
+  // --- MIN/MAX Z BACKENDU ---
+  const hasMin = typeof sensorAttrs.stats_min === 'number';
+  const hasMax = typeof sensorAttrs.stats_max === 'number';
+
+  const min = hasMin ? sensorAttrs.stats_min : 0;
+  const max = hasMax ? sensorAttrs.stats_max : (min + 1);
+
+  // --- NALEZENÍ BODŮ MIN/MAX ---
   let minPoint = null;
   let maxPoint = null;
 
-  if (sensorAttrs && typeof sensorAttrs.stats_min === 'number' && typeof sensorAttrs.stats_max === 'number') {
-    min = sensorAttrs.stats_min;
-    max = sensorAttrs.stats_max;
-
-    if (points && points.length > 0) {
-      // Bezpečné vyhledání bodů s tolerancí 0.01 kvůli floating-point nepřesnostem v JS
-      minPoint = points.reduce((acc, p) => (Math.abs(p.y - min) < 0.01 ? p : acc), null);
-      maxPoint = points.reduce((acc, p) => (Math.abs(p.y - max) < 0.01 ? p : acc), null);
-    }
+  if (points && points.length > 0) {
+    minPoint = points.reduce(
+      (acc, p) => (Math.abs(p.y - min) < 0.01 ? p : acc),
+      null
+    );
+    maxPoint = points.reduce(
+      (acc, p) => (Math.abs(p.y - max) < 0.01 ? p : acc),
+      null
+    );
   }
+
+  // --- ROZŠÍŘENÍ OSY Y O 5 % ---
+  const delta = Math.abs(max - min) || 1;
+  const yMin = min - delta * 0.05;
+  const yMax = max + delta * 0.05;
+
+  const rgba = hexToRgba(color, 0.25);
 
   return {
     type: 'line',
     data: {
       datasets: [
         {
-          label: cleanName,
+          label: prettyName,
           data: points,
           borderColor: color,
           backgroundColor: rgba,
           tension: isStepped ? 0 : 0.3,
-          stepped: isStepped ? true : false,
+          stepped: isStepped,
           pointRadius: 0,
           borderWidth: 2
         },
@@ -207,20 +223,18 @@ function createLineChartConfig(points, cleanName, color, textColor, sensorId, se
     options: {
       responsive: false,
       maintainAspectRatio: false,
-      layout: { padding: { left: 6, right: 8, top: 6, bottom: 6 } },
       plugins: { tooltip: {}, legend: { display: false } },
       scales: {
-        x: { 
-          type: 'time', 
-          time: { unit: 'hour' }, 
+        x: {
+          type: 'time',
           min: startX,
           max: endX,
-          ticks: { color: textColor }, 
-          grid: { color: GRID_COLOR } 
+          ticks: { color: textColor },
+          grid: { color: GRID_COLOR }
         },
         y: {
-          min: typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : yMinAxis,
-          max: typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : undefined,
+          min: yMin,
+          max: yMax,
           ticks: { color: textColor },
           grid: { color: GRID_COLOR }
         }
@@ -244,14 +258,36 @@ function computeChartGeometry(chartArea) {
  * ARCHITEKTURA FRONTENDU: Vlastní Canvas plugin pro detailní vykreslení větrné růžice.
  * Data pro avg/mode/var bere z atributů senzoru směru větru (backend).
  */
-function createWindRosePlugin(theme, bins, avg, mode, vari) {
+function createWindRosePlugin(theme, points, sensorAttrs) {
+  // --- Získání statistik směru větru z backendu ---
+  const avg = typeof sensorAttrs.vitr_smer_avg === 'number'
+    ? sensorAttrs.vitr_smer_avg
+    : 0;
+
+  const mode = typeof sensorAttrs.vitr_smer_mode === 'number'
+    ? sensorAttrs.vitr_smer_mode
+    : 0;
+
+  const vari = typeof sensorAttrs.vitr_smer_var === 'number'
+    ? sensorAttrs.vitr_smer_var
+    : 0;
+
+  // --- Histogram směrů větru (16 sektorů) ---
+  const bins = buildWindRose(points);
+
   return {
     id: 'windRoseManual',
+
     beforeInit(chart) {
       const canvas = chart.canvas;
+
       canvas.addEventListener('mousemove', (ev) => {
         const rect = canvas.getBoundingClientRect();
-        chart.$mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+        chart.$mouse = {
+          x: ev.clientX - rect.left,
+          y: ev.clientY - rect.top
+        };
+
         const { cx, cy, R } = computeChartGeometry(chart.chartArea || chart);
         const dx = chart.$mouse.x - cx;
         const dy = chart.$mouse.y - cy;
@@ -266,8 +302,14 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         let angle = Math.atan2(dy, dx) * 180 / Math.PI;
         angle += 90;
         if (angle < 0) angle += 360;
+
         const sectorIndex = Math.floor(angle / 22.5) % 16;
-        chart.$windHover = { index: sectorIndex, value: bins[sectorIndex], angle };
+        chart.$windHover = {
+          index: sectorIndex,
+          value: bins[sectorIndex],
+          angle
+        };
+
         chart.draw();
       });
 
@@ -276,8 +318,10 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         chart.draw();
       });
     },
+
     afterDraw(chart) {
       chart.$bins = bins;
+
       const { ctx, chartArea } = chart;
       const { cx, cy, R } = computeChartGeometry(chartArea);
       const maxBin = Math.max(...bins) || 1;
@@ -286,15 +330,15 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       ctx.save();
       ctx.strokeStyle = GRID_COLOR;
       ctx.lineWidth = 1;
-      
-      // Vykreslení pomocných kružnic (mřížky)
+
+      // --- Kružnice mřížky ---
       [0.15, 0.30, 0.45, 0.60, 0.75, 0.90].forEach(f => {
         ctx.beginPath();
         ctx.arc(cx, cy, R * f, 0, Math.PI * 2);
         ctx.stroke();
       });
 
-      // Vykreslení hlavních os (směrů) mřížky
+      // --- Hlavní osy ---
       [0, 45, 90, 135, 180, 225, 270, 315].forEach(deg => {
         const a = (deg - 90) * Math.PI / 180;
         ctx.beginPath();
@@ -303,8 +347,9 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.stroke();
       });
 
-      // Vykreslení samotných datových sektorů (četnosti směrů větru)
+      // --- Sektory větrné růžice ---
       const sectorColor = '#009688';
+
       for (let i = 0; i < 16; i++) {
         const binValue = bins[i];
         const radius = (binValue / maxBin) * (R * 0.90);
@@ -323,12 +368,14 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.stroke();
       }
 
-      // Vykreslení popisků světových stran kolem růžice
+      // --- Popisky světových stran ---
       ctx.fillStyle = theme.textColor;
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+
       const offsetText = R + 10;
+
       WIND_DIR_LABELS.forEach((label, i) => {
         const angle = ((i * 22.5) - 90) * Math.PI / 180;
         const x = cx + Math.cos(angle) * offsetText;
@@ -336,16 +383,17 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.fillText(label, x, y);
       });
 
-      const avgLineLen = R - 5;    
-      const modeLineLen = R - 25;  
-      const offsetVar = R - 10;    
+      // --- Výpočet úhlů pro avg/mode/var ---
+      const avgLineLen = R - 5;
+      const modeLineLen = R - 25;
+      const offsetVar = R - 10;
 
       const avgAngle = (avg - 90) * Math.PI / 180;
       const modeAngle = (mode - 90) * Math.PI / 180;
       const startVar = (avg - vari - 90) * Math.PI / 180;
       const endVar = (avg + vari - 90) * Math.PI / 180;
 
-      // ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Vykreslení rozptylu (variance) větru.
+      // --- Variance ---
       ctx.fillStyle = 'rgba(255,165,0,0.22)';
       ctx.beginPath();
       ctx.moveTo(cx, cy);
@@ -353,40 +401,41 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
       ctx.closePath();
       ctx.fill();
 
-      // Vykreslení průměrného směru větru (červená čára)
+      // --- AVG ---
       ctx.strokeStyle = '#ff0000';
       ctx.lineWidth = 2.5;
-      ctx.setLineDash([]); 
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(cx + Math.cos(avgAngle) * avgLineLen, cy + Math.sin(avgAngle) * avgLineLen);
       ctx.stroke();
 
-      // Vykreslení modu - převládajícího směru (modrá čára)
+      // --- MODE ---
       ctx.strokeStyle = '#0000ff';
       ctx.lineWidth = 5.0;
-      ctx.setLineDash([]); 
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(cx + Math.cos(modeAngle) * modeLineLen, cy + Math.sin(modeAngle) * modeLineLen);
       ctx.stroke();
 
-      // Ruční vykreslení tooltipu
+      // --- Tooltip ---
       if (chart.$windHover && chart.$mouse) {
         const { index, value } = chart.$windHover;
         const { x: mx, y: my } = chart.$mouse;
+
         const label = WIND_DIR_LABELS[index];
         const percent = ((value / maxBin) * 100).toFixed(1);
-        const tooltipText = label + ': ' + value + '× (' + percent + '%)';
+        const tooltipText = `${label}: ${value}× (${percent}%)`;
 
         ctx.save();
         ctx.font = '12px sans-serif';
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
+
         const paddingX = 8;
         const textWidth = ctx.measureText(tooltipText).width;
         const boxWidth = textWidth + paddingX * 2;
         const boxHeight = 20;
+
         let tx = mx + 10;
         let ty = my - boxHeight - 10;
 
@@ -400,6 +449,7 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.fillStyle = theme.bgColor + 'f0';
         ctx.strokeStyle = theme.textColor + '80';
         ctx.lineWidth = 1.5;
+
         ctx.beginPath();
         if (typeof ctx.roundRect === 'function') {
           ctx.roundRect(tx, ty, boxWidth, boxHeight, 4);
@@ -412,8 +462,10 @@ function createWindRosePlugin(theme, bins, avg, mode, vari) {
         ctx.shadowColor = 'transparent';
         ctx.fillStyle = theme.textColor;
         ctx.fillText(tooltipText, tx + paddingX, ty + boxHeight / 2);
+
         ctx.restore();
       }
+
       ctx.restore();
     }
   };
@@ -806,7 +858,7 @@ class PocasiMeteoCard extends HTMLElement {
         if (this._charts[entityId]) this._charts[entityId].destroy();
         this._charts[entityId] = new Chart(
           item.canvas.getContext('2d'),
-          createLineChartConfig(points, item.prettyName, sensorColor, theme.textColor, item.id, sensorStyle, apiLastTs, statsIntervalHours, sensorAttrs)
+          createLineChartConfig(points, item.prettyName, theme, sensorAttrs, statsIntervalHours)
         );
         continue;
       }
@@ -824,11 +876,7 @@ class PocasiMeteoCard extends HTMLElement {
         tile.style.backgroundColor = theme.bgColor;
 
         if (id === 'vitr_smer') {
-          const bins = points.length > 0 ? buildWindRose(points) : new Array(16).fill(0);
-          const avg = typeof sensorAttrs.vitr_smer_avg === 'number' ? sensorAttrs.vitr_smer_avg : 0;
-          const mode = typeof sensorAttrs.vitr_smer_mode === 'number' ? sensorAttrs.vitr_smer_mode : 0;
-          const vari = typeof sensorAttrs.vitr_smer_var === 'number' ? sensorAttrs.vitr_smer_var : 0;
-
+          
           if (this._charts[entityId]) this._charts[entityId].destroy();
           canvas.style.backgroundColor = theme.bgColor;
           tile.style.backgroundColor = theme.bgColor;
@@ -838,7 +886,7 @@ class PocasiMeteoCard extends HTMLElement {
             data: {
               labels: WIND_DIR_LABELS,
               datasets: [{
-                data: bins,
+                data: points.length > 0 ? buildWindRose(points) : new Array(16).fill(0),
                 backgroundColor: hexToRgba('#009688', 0.85),
                 borderColor: '#004d40',
                 borderWidth: 1
@@ -858,7 +906,7 @@ class PocasiMeteoCard extends HTMLElement {
                 }
               }
             },
-            plugins: [createWindRosePlugin(theme, bins, avg, mode, vari)]
+            plugins: [ createWindRosePlugin(theme, points, sensorAttrs) ]
           });
 
           legend.innerHTML = `
@@ -882,9 +930,14 @@ class PocasiMeteoCard extends HTMLElement {
           const minVal = typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : 0;
           const maxVal = typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : 0;
           
+          // Zničení předchozího běžícího grafu zabrání vrstvení os a deformaci měřítka
+          if (this._charts[entityId]) {
+            this._charts[entityId].destroy();
+          }
+
           this._charts[entityId] = new Chart(
             canvas.getContext('2d'),
-            createLineChartConfig(points, prettyName, sensorColor, theme.textColor, id, sensorStyle, apiLastTs, statsIntervalHours, sensorAttrs)
+            createLineChartConfig(points, prettyName, theme, sensorAttrs, statsIntervalHours)
           );
           
           legend.innerHTML = `
