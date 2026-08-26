@@ -146,19 +146,6 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
   const min = typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : 0;
   const max = typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : (min + 1);
 
-function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsIntervalHours) {
-  const color = sensorAttrs.graph_color || '#3b82f6';
-  const isStepped = sensorAttrs.graph_style === 'stepped';
-  const textColor = theme.textColor;
-
-  const lastUpdateTs = sensorAttrs.timestamp ? Date.parse(sensorAttrs.timestamp) : Date.now();
-  const endX = Date.now();
-  const intervalMs = (statsIntervalHours || 24) * 3600 * 1000;
-  const startX = endX - intervalMs;
-
-  const min = typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : 0;
-  const max = typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : (min + 1);
-
   // Vytvoříme bezpečné hranice osy Y přímo z hodnot z backendu s mírným přesahem (např. 5 %),
   // aby křivka nikdy neškrtala o horní nebo spodní okraj grafu
   const padding = (max - min) * 0.05 || 1;
