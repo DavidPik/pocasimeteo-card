@@ -570,13 +570,18 @@ class PocasiMeteoCard extends HTMLElement {
     css += '.pm-graphs { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; align-items: stretch; width: 100%; box-sizing: border-box; }';
     
     // Dlaždice dostane dynamický výpočet šířky, flex-grow pro vyplnění řádku a striktní min-width 200px
-    css += '.pm-graph-tile { box-sizing: border-box; flex: 1 1 calc((100% - (var(--graphs-per-row) - 1) * 16px) / var(--graphs-per-row)); min-width: 200px; background: var(--ha-card-background,#1c1c1c); border-radius: 12px; padding: 8px; box-shadow: var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display: flex; flex-direction: column; overflow: hidden; }';
+    css += '.pm-graph-tile { box-sizing: border-box; flex: 0 1 calc((100% - (var(--graphs-per-row) - 1) * 16px) / var(--graphs-per-row)); min-width: 200px; background: var(--ha-card-background,#1c1c1c); border-radius: 12px; padding: 8px; box-shadow: var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display: flex; flex-direction: column; overflow: hidden; }';
     
     css += '.pm-graph-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; padding: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }';
     css += '.pm-graph { width:100%; height:180px; display:block; }'; // Zajištění, že canvas vyplní šířku dlaždice
     css += '.pm-legend { margin-top:0px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:14px; opacity:0.8; padding: 4px; }';
     css += '.pm-legend-item { display:flex; align-items:center; gap:4px; }';
     css += '.pm-legend-color { width:12px; height:12px; border-radius:2px; }';
+
+    // Pokud se kvůli min-width 200px dlaždice zalomí a nevleze se jich vedle sebe požadovaný počet,
+    // dovolíme jim na malých displejích vyplnit řádek, ale na velkých budou držet přesný sloupec.
+    css += '@media (max-width: 480px) { .pm-graph-tile { flex-grow: 1; } }';
+
     style.textContent = css;
 
     const card = document.createElement('ha-card');
@@ -765,6 +770,14 @@ class PocasiMeteoCard extends HTMLElement {
 
         // Výšku nastavíme natvrdo podle typu grafu, responzivní šířku si canvas vyřeší sám přes CSS
         canvas.style.height = (s.id === 'vitr_smer' ? '220px' : '180px');
+
+        // Přečteme reálnou šířku, kterou dlaždici přidělil CSS flexbox
+        const realWidth = tile.getBoundingClientRect().width - 16; // odečteme padding dlaždice
+        const realHeight = s.id === 'vitr_smer' ? 220 : 180;
+
+        // Nastavíme vnitřní atributy canvasu, aby Chart.js kreslil 1:1 k realitě
+        canvas.setAttribute('width', Math.round(realWidth));
+        canvas.setAttribute('height', Math.round(realHeight));
 
         const ctx = canvas.getContext('2d');
         ctx.resetTransform();
