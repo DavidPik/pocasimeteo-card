@@ -146,12 +146,20 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
   const min = typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : 0;
   const max = typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : (min + 1);
 
+  // Vytvoříme bezpečné hranice osy Y přímo z hodnot z backendu s mírným přesahem (např. 5 %),
+  // aby křivka nikdy neškrtala o horní nebo spodní okraj grafu
+  const padding = (max - min) * 0.05 || 1;
+  const yMin = min - padding;
+  const yMax = max + padding;
+
+  // Hledání bodů min/max v poli upravíme tak, aby našlo bod, který je hodnotě z backendu NEJBLÍŽE,
+  // místo rigidního porovnávání na setiny, které kvůli zaokrouhlování v DB selhává:
   let minPoint = null;
   let maxPoint = null;
 
   if (points && points.length > 0) {
-    minPoint = points.reduce((acc, p) => (Math.abs(p.y - min) < 0.01 ? p : acc), null);
-    maxPoint = points.reduce((acc, p) => (Math.abs(p.y - max) < 0.01 ? p : acc), null);
+    minPoint = points.reduce((acc, p) => (acc === null || Math.abs(p.y - min) < Math.abs(acc.y - min) ? p : acc), null);
+    maxPoint = points.reduce((acc, p) => (acc === null || Math.abs(p.y - max) < Math.abs(acc.y - max) ? p : acc), null);
   }
 
   function niceStep(minVal, maxVal, targetTicks = 5) {
@@ -234,7 +242,7 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
         y: {
           min: yMin,
           max: yMax,
-          ticks: { color: textColor, stepSize: step },
+          ticks: { color: textColor},
           grid: { color: GRID_COLOR }
         }
       }
