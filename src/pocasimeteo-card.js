@@ -202,6 +202,7 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      resizeDelay: 10,
       plugins: { tooltip: {}, legend: { display: false } },
       layout: { padding: { top: 8, bottom: 8, left: 6, right: 8 } },
       scales: {
@@ -820,6 +821,8 @@ class PocasiMeteoCard extends HTMLElement {
 
         if (this._charts[entityId]) {
           this._charts[entityId].destroy();
+          canvas.removeAttribute('width');
+          canvas.removeAttribute('height');
         }
 
         canvas.style.backgroundColor = theme.bgColor;
