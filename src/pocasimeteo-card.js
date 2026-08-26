@@ -767,9 +767,6 @@ class PocasiMeteoCard extends HTMLElement {
 
         section.container.appendChild(tile);
 
-        const ctx = canvas.getContext('2d');
-        ctx.resetTransform();
-
         canvases[s.entity_id] = { canvas, tile, prettyName, legend, id: s.id };
       }
     }
@@ -821,15 +818,25 @@ class PocasiMeteoCard extends HTMLElement {
 
         if (this._charts[entityId]) {
           this._charts[entityId].destroy();
-          canvas.removeAttribute('width');
-          canvas.removeAttribute('height');
         }
-
-        canvas.style.backgroundColor = theme.bgColor;
+        
         tile.style.backgroundColor = theme.bgColor;
+        
+        // ÚPLNÝ RESET PLÁTNA: Najdeme obal, smažeme starý canvas a vložíme zcela nový,
+        // čímž stoprocentně eliminujeme jakékoliv zdvojení měřítka (DPR 2x) z paměti prohlížeče.
+        const currentWrapper = canvas.parentNode;
+        currentWrapper.innerHTML = '';
+        
+        const newCanvas = document.createElement('canvas');
+        newCanvas.classList.add('pm-graph');
+        newCanvas.style.backgroundColor = theme.bgColor;
+        currentWrapper.appendChild(newCanvas);
+        
+        // Aktualizujeme referenci pro novou instanci Chart.js
+        const activeCanvas = newCanvas;
 
         if (id === 'vitr_smer') {
-          this._charts[entityId] = new Chart(canvas.getContext('2d'), {
+          this._charts[entityId] = new Chart(activeCanvas.getContext('2d'), {
             type: 'polarArea',
             data: {
               labels: WIND_DIR_LABELS,
@@ -879,7 +886,7 @@ class PocasiMeteoCard extends HTMLElement {
           const maxVal = typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : 0;
           
           this._charts[entityId] = new Chart(
-            canvas.getContext('2d'),
+            activeCanvas.getContext('2d'),
             createLineChartConfig(points, prettyName, theme, sensorAttrs, statsIntervalHours)
           );
           
