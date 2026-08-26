@@ -214,7 +214,7 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
       ]
     },
     options: {
-      responsive: true,
+      responsive: false,
       maintainAspectRatio: false,
       plugins: { tooltip: {}, legend: { display: false } },
       layout: { padding: { top: 8, bottom: 8, left: 6, right: 8 } },
@@ -838,7 +838,7 @@ class PocasiMeteoCard extends HTMLElement {
               }]
             },
             options: {
-              responsive: true,
+              responsive: false,
               maintainAspectRatio: true,
               layout: { padding: 25 },
               plugins: { legend: { display: false }, tooltip: { enabled: false } },
