@@ -146,11 +146,29 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
   const min = typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : 0;
   const max = typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : (min + 1);
 
+function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsIntervalHours) {
+  const color = sensorAttrs.graph_color || '#3b82f6';
+  const isStepped = sensorAttrs.graph_style === 'stepped';
+  const textColor = theme.textColor;
+
+  const lastUpdateTs = sensorAttrs.timestamp ? Date.parse(sensorAttrs.timestamp) : Date.now();
+  const endX = Date.now();
+  const intervalMs = (statsIntervalHours || 24) * 3600 * 1000;
+  const startX = endX - intervalMs;
+
+  const min = typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : 0;
+  const max = typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : (min + 1);
+
   // Vytvoříme bezpečné hranice osy Y přímo z hodnot z backendu s mírným přesahem (např. 5 %),
   // aby křivka nikdy neškrtala o horní nebo spodní okraj grafu
   const padding = (max - min) * 0.05 || 1;
-  const yMin = min - padding;
-  const yMax = max + padding;
+  let finalMin = min - padding;
+  const finalMax = max + padding;
+
+  // Bezpečné ošetření: Žádný graf s výjimkou teploty nesmí na ose Y začínat v záporných hodnotách
+  if (!prettyName.toLowerCase().includes('teplot') && !prettyName.toLowerCase().includes('temperature') && finalMin < 0) {
+    finalMin = 0;
+  }
 
   // Hledání bodů min/max v poli upravíme tak, aby našlo bod, který je hodnotě z backendu NEJBLÍŽE,
   // místo rigidního porovnávání na setiny, které kvůli zaokrouhlování v DB selhává:
@@ -162,33 +180,6 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
     maxPoint = points.reduce((acc, p) => (acc === null || Math.abs(p.y - max) < Math.abs(acc.y - max) ? p : acc), null);
   }
 
-  function niceStep(minVal, maxVal, targetTicks = 5) {
-    const range = Math.abs(maxVal - minVal) || 1;
-    const rawStep = range / targetTicks;
-    const pow10 = Math.pow(10, Math.floor(Math.log10(rawStep)));
-    const frac = rawStep / pow10;
-    let niceFrac = 1;
-    if (frac <= 1) niceFrac = 1;
-    else if (frac <= 2) niceFrac = 2;
-    else if (frac <= 5) niceFrac = 5;
-    else niceFrac = 10;
-    return niceFrac * pow10;
-  }
-
-  const step = niceStep(min, max, 5);
-  let alignedMin = Math.floor(min / step) * step;
-  let alignedMax = Math.ceil(max / step) * step;
-
-  if (alignedMin === alignedMax) {
-    alignedMin -= step;
-    alignedMax += step;
-  }
-
-  const marginFactor = 0.05;
-  let yMin = alignedMin - step * marginFactor;
-  if (!prettyName.toLowerCase().includes('teplot') && yMin < 0) {
-    yMin = 0;
-  }  const yMax = alignedMax + step * marginFactor;
   const rgba = hexToRgba(color, 0.25);
 
   return {
@@ -240,8 +231,8 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
           grid: { color: GRID_COLOR }
         },
         y: {
-          min: yMin,
-          max: yMax,
+          min: finalMin,
+          max: finalMax,
           ticks: { color: textColor},
           grid: { color: GRID_COLOR }
         }
