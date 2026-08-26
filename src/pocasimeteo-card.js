@@ -139,8 +139,8 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
   const textColor = theme.textColor;
 
   const lastUpdateTs = sensorAttrs.timestamp ? Date.parse(sensorAttrs.timestamp) : Date.now();
+  const endX = Date.now();
   const intervalMs = (statsIntervalHours || 24) * 3600 * 1000;
-  const endX = lastUpdateTs;
   const startX = endX - intervalMs;
 
   const min = typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : 0;
@@ -214,7 +214,7 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
       ]
     },
     options: {
-      responsive: false,
+      responsive: true,
       maintainAspectRatio: false,
       plugins: { tooltip: {}, legend: { display: false } },
       layout: { padding: { top: 8, bottom: 8, left: 6, right: 8 } },
@@ -223,6 +223,11 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
           type: 'time',
           min: startX,
           max: endX,
+          time: {
+            displayFormats: {
+              hour: 'HH:mm'
+            }
+          },
           ticks: { color: textColor },
           grid: { color: GRID_COLOR }
         },
@@ -762,22 +767,18 @@ class PocasiMeteoCard extends HTMLElement {
         const legend = document.createElement('div');
         legend.classList.add('pm-legend');
 
+        const chartWrapper = document.createElement('div');
+        chartWrapper.style.position = 'relative';
+        chartWrapper.style.width = '100%';
+        chartWrapper.style.height = (s.id === 'vitr_smer' ? '220px' : '180px');
+
+        chartWrapper.appendChild(canvas);
+
         tile.appendChild(titleElement);
-        tile.appendChild(canvas);
+        tile.appendChild(chartWrapper); // Vložíme obal místo samotného canvasu
         tile.appendChild(legend);
 
         section.container.appendChild(tile);
-
-        // Výšku nastavíme natvrdo podle typu grafu, responzivní šířku si canvas vyřeší sám přes CSS
-        canvas.style.height = (s.id === 'vitr_smer' ? '220px' : '180px');
-
-        // Přečteme reálnou šířku, kterou dlaždici přidělil CSS flexbox
-        const realWidth = tile.getBoundingClientRect().width - 16; // odečteme padding dlaždice
-        const realHeight = s.id === 'vitr_smer' ? 220 : 180;
-
-        // Nastavíme vnitřní atributy canvasu, aby Chart.js kreslil 1:1 k realitě
-        canvas.setAttribute('width', Math.round(realWidth));
-        canvas.setAttribute('height', Math.round(realHeight));
 
         const ctx = canvas.getContext('2d');
         ctx.resetTransform();
@@ -851,7 +852,7 @@ class PocasiMeteoCard extends HTMLElement {
               }]
             },
             options: {
-              responsive: false,
+              responsive: true,
               maintainAspectRatio: true,
               layout: { padding: 25 },
               plugins: { legend: { display: false }, tooltip: { enabled: false } },
