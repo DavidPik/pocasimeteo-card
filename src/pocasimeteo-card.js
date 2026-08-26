@@ -183,10 +183,41 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
     );
   }
 
-  // --- ROZŠÍŘENÍ OSY Y O 5 % ---
-  const delta = Math.abs(max - min) || 1;
-  const yMin = min - delta * 0.05;
-  const yMax = max + delta * 0.05;
+  // --- ROZŠÍŘENÍ OSY Y: zarovnání na "hezké" ticky a přidání marginu ---
+  const rawMin = min;
+  const rawMax = max;
+  const rawDelta = Math.abs(rawMax - rawMin) || 1;
+
+  // Funkce pro výpočet "nice" kroku (1,2,5 * 10^n)
+  function niceStep(minVal, maxVal, targetTicks = 5) {
+    const range = Math.abs(maxVal - minVal) || 1;
+    const rawStep = range / targetTicks;
+    const pow10 = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const frac = rawStep / pow10;
+    let niceFrac;
+    if (frac <= 1) niceFrac = 1;
+    else if (frac <= 2) niceFrac = 2;
+    else if (frac <= 5) niceFrac = 5;
+    else niceFrac = 10;
+    return niceFrac * pow10;
+  }
+
+  const step = niceStep(rawMin, rawMax, 5);
+
+  // Zarovnání hranic na násobky kroku
+  let alignedMin = Math.floor(rawMin / step) * step;
+  let alignedMax = Math.ceil(rawMax / step) * step;
+
+  // Pokud jsou min a max stejné (delta==0), rozšiř o jeden krok
+  if (alignedMin === alignedMax) {
+    alignedMin = alignedMin - step;
+    alignedMax = alignedMax + step;
+  }
+
+  // Přidat drobný margin v jednotkách osy, aby body/marker nebyly oříznuté
+  const marginFactor = 0.05; // 5% z kroku
+  const yMin = alignedMin - step * marginFactor;
+  const yMax = alignedMax + step * marginFactor;
 
   const rgba = hexToRgba(color, 0.25);
 
@@ -224,6 +255,9 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
       responsive: false,
       maintainAspectRatio: false,
       plugins: { tooltip: {}, legend: { display: false } },
+      layout: {
+        padding: { top: 8, bottom: 8, left: 6, right: 8 }
+      },
       scales: {
         x: {
           type: 'time',
@@ -235,7 +269,10 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
         y: {
           min: yMin,
           max: yMax,
-          ticks: { color: textColor },
+          ticks: {
+            color: textColor,
+            stepSize: step
+          },
           grid: { color: GRID_COLOR }
         }
       }
