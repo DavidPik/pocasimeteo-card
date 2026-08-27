@@ -757,7 +757,16 @@ class PocasiMeteoCard extends HTMLElement {
         const chartWrapper = document.createElement('div');
         chartWrapper.style.position = 'relative';
         chartWrapper.style.width = '100%';
-        chartWrapper.style.height = (s.id === 'vitr_smer' ? '220px' : '180px');
+        
+        if (s.id === 'vitr_smer') {
+          // Větrné růžici nastavíme čtvercový rozměr a vycentrujeme ji v dlaždici
+          chartWrapper.style.height = '220px';
+          chartWrapper.style.display = 'flex';
+          chartWrapper.style.justifyContent = 'center';
+          chartWrapper.style.alignItems = 'center';
+        } else {
+          chartWrapper.style.height = '180px';
+        }
 
         chartWrapper.appendChild(canvas);
 
@@ -849,9 +858,19 @@ class PocasiMeteoCard extends HTMLElement {
             },
             options: {
               responsive: true,
-              maintainAspectRatio: true,
-              layout: { padding: 25 },
-              plugins: { legend: { display: false }, tooltip: { enabled: false } },
+              maintainAspectRatio: false, // Změňte na false, aby vyplnil wrapper
+              layout: {
+                padding: {
+                  top: 10,
+                  bottom: 10,
+                  left: 10,
+                  right: 10
+                }
+              },
+              plugins: { 
+                legend: { display: false }, 
+                tooltip: { enabled: false } 
+              },
               scales: {
                 r: {
                   ticks: { display: false },
