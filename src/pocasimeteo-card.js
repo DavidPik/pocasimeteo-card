@@ -861,8 +861,8 @@ class PocasiMeteoCard extends HTMLElement {
               labels: WIND_DIR_LABELS,
               datasets: [{
                 data: points.length > 0 ? buildWindRose(points) : new Array(16).fill(0),
-                backgroundColor: hexToRgba('#009688', 0.85),
-                borderColor: '#004d40',
+                backgroundColor: 'transparent',
+                borderColor: 'transparent',
                 borderWidth: 1
               }]
             },
@@ -883,8 +883,7 @@ class PocasiMeteoCard extends HTMLElement {
               },
               scales: {
                 r: {
-                  ticks: { display: false },
-                  grid: { color: GRID_COLOR }
+                  display: false
                 }
               }
             },
