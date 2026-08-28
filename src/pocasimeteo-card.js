@@ -242,6 +242,10 @@ function computeChartGeometry(chartArea) {
 /**
  * ARCHITEKTURA FRONTENDU: Vlastní Canvas plugin pro detailní vykreslení větrné růžice.
  */
+/**
+ * ARCHITEKTURA FRONTENDU: Vlastní Canvas plugin pro detailní vykreslení větrné růžice.
+ * OPRAVENÁ VERZE: Zamezuje vrstvení grafiky, zmenšuje poloměr mřížky a dává prostor popiskům.
+ */
 function createWindRosePlugin(theme, points, sensorAttrs) {
   const avg = typeof sensorAttrs.vitr_smer_avg === 'number' ? sensorAttrs.vitr_smer_avg : 0;
   const mode = typeof sensorAttrs.vitr_smer_mode === 'number' ? sensorAttrs.vitr_smer_mode : 0;
@@ -266,9 +270,10 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
         const dy = chart.$mouse.y - cy;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist > R) {
+        // Zmenšený akční rádius pro detekci myši (odpovídá nové velikosti mřížky)
+        if (dist > R * 0.80) {
           chart.$windHover = null;
-          chart.draw();
+          chart.render(); // OPRAVA: render() čistí plátno, draw() vrstvil grafiku
           return;
         }
 
@@ -282,12 +287,12 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
           angle
         };
 
-        chart.draw();
+        chart.render(); // OPRAVA: Použit render() namísto draw()
       });
 
       canvas.addEventListener('mouseleave', () => {
         chart.$windHover = null;
-        chart.draw();
+        chart.render(); // OPRAVA: Použit render() namísto draw()
       });
     },
 
@@ -303,20 +308,24 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       ctx.strokeStyle = GRID_COLOR;
       ctx.lineWidth = 1;
 
+      // OPRAVA: Všechny kružnice a sektory škálujeme do 75 % poloměru (R * 0.75),
+      // čímž vytvoříme dostatek místa pro textové popisky na okrajích
+      const activeRadius = R * 0.85;
+
       // --- Kružnice mřížky ---
-      [0.15, 0.30, 0.45, 0.60, 0.75, 0.90].forEach(f => {
+      [0.2, 0.4, 0.6, 0.8, 1.0].forEach(f => {
         ctx.beginPath();
-        ctx.arc(cx, cy, R * f, 0, Math.PI * 2);
+        ctx.arc(cx, cy, activeRadius * f, 0, Math.PI * 2);
         ctx.stroke();
       });
 
       // --- Hlavní osy ---
-      const degAxes = [0, 45, 90, 135, 180, 225, 270, 315];
+      const degAxes =;
       degAxes.forEach(deg => {
         const a = (deg - 90) * Math.PI / 180;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+        ctx.lineTo(cx + Math.cos(a) * activeRadius, cy + Math.sin(a) * activeRadius);
         ctx.stroke();
       });
 
@@ -325,7 +334,7 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
 
       for (let i = 0; i < 16; i++) {
         const binValue = bins[i];
-        const radius = (binValue / maxBin) * (R * 0.90);
+        const radius = (binValue / maxBin) * activeRadius;
         const midAngle = ((i * 22.5) - 90) * Math.PI / 180;
         const startAngle = midAngle - sectorAngle / 2;
         const endAngle = midAngle + sectorAngle / 2;
@@ -343,11 +352,12 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
 
       // --- Popisky světových stran ---
       ctx.fillStyle = theme.textColor;
-      ctx.font = '14px sans-serif';
+      ctx.font = 'bold 12px sans-serif'; // Čitelnější tučný font
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      const offsetText = R + 10;
+      // Popisky umístíme kousek za hranici aktivního poloměru růžice
+      const offsetText = activeRadius + 14;
 
       WIND_DIR_LABELS.forEach((label, i) => {
         const angle = ((i * 22.5) - 90) * Math.PI / 180;
@@ -356,17 +366,17 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
         ctx.fillText(label, x, y);
       });
 
-      // --- Výpočet úhlů pro avg/mode/var ---
-      const avgLineLen = R - 5;
-      const modeLineLen = R - 25;
-      const offsetVar = R - 10;
+      // --- Výpočet úhlů pro průměr / mod / varianci ---
+      const avgLineLen = activeRadius;
+      const modeLineLen = activeRadius - 15;
+      const offsetVar = activeRadius - 5;
 
       const avgAngle = (avg - 90) * Math.PI / 180;
       const modeAngle = (mode - 90) * Math.PI / 180;
       const startVar = (avg - vari - 90) * Math.PI / 180;
       const endVar = (avg + vari - 90) * Math.PI / 180;
 
-      // --- Variance ---
+      // --- Variance (Rozptyl) ---
       ctx.fillStyle = 'rgba(255,165,0,0.22)';
       ctx.beginPath();
       ctx.moveTo(cx, cy);
@@ -374,7 +384,7 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       ctx.closePath();
       ctx.fill();
 
-      // --- AVG ---
+      // --- AVG (Průměrný směr) ---
       ctx.strokeStyle = '#ff0000';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
@@ -382,15 +392,15 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       ctx.lineTo(cx + Math.cos(avgAngle) * avgLineLen, cy + Math.sin(avgAngle) * avgLineLen);
       ctx.stroke();
 
-      // --- MODE ---
+      // --- MODE (Převládající směr) ---
       ctx.strokeStyle = '#0000ff';
-      ctx.lineWidth = 5.0;
+      ctx.lineWidth = 4.0;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(cx + Math.cos(modeAngle) * modeLineLen, cy + Math.sin(modeAngle) * modeLineLen);
       ctx.stroke();
 
-      // --- Tooltip ---
+      // --- Interaktivní Tooltip ---
       if (chart.$windHover && chart.$mouse) {
         const { index, value } = chart.$windHover;
         const { x: mx, y: my } = chart.$mouse;
@@ -882,10 +892,15 @@ class PocasiMeteoCard extends HTMLElement {
           });
 
           legend.textContent = '';
+
+          const avgVal = typeof sensorAttrs.vitr_smer_avg === 'number' ? sensorAttrs.vitr_smer_avg : 0;
+          const modeVal = typeof sensorAttrs.vitr_smer_mode === 'number' ? sensorAttrs.vitr_smer_mode : 0;
+          const varVal = typeof sensorAttrs.vitr_smer_var === 'number' ? sensorAttrs.vitr_smer_var : 0;
+
           const labelsData = [
-            { color: '#ff0000', text: 'Průměrný směr větru' },
-            { color: '#0000ff', text: 'Převládající směr (mod)' },
-            { color: '#ffa500', text: 'Rozptyl (variance)' }
+            { color: '#ff0000', text: `Průměr: ${avgVal.toFixed(0)}° (${degToDirection(avgVal)})` },
+            { color: '#0000ff', text: `Mod: ${modeVal.toFixed(0)}° (${degToDirection(modeVal)})` },
+            { color: '#ffa500', text: `Rozptyl: ±${varVal.toFixed(0)}°` }
           ];
 
           labelsData.forEach(item => {
