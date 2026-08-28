@@ -357,7 +357,7 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       ctx.textBaseline = 'middle';
 
       // Popisky umístíme kousek za hranici aktivního poloměru růžice
-      const offsetText = activeRadius + 14;
+      const offsetText = activeRadius + 22;
 
       WIND_DIR_LABELS.forEach((label, i) => {
         const angle = ((i * 22.5) - 90) * Math.PI / 180;
@@ -770,7 +770,7 @@ class PocasiMeteoCard extends HTMLElement {
         
         if (s.id === 'vitr_smer') {
           // Větrné růžici nastavíme čtvercový rozměr a vycentrujeme ji v dlaždici
-          chartWrapper.style.height = '220px';
+          chartWrapper.style.height = '260px';
           chartWrapper.style.display = 'flex';
           chartWrapper.style.justifyContent = 'center';
           chartWrapper.style.alignItems = 'center';
