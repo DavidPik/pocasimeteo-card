@@ -320,7 +320,7 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       });
 
       // --- Hlavní osy ---
-      const degAxes =;
+      const degAxes = [0, 45, 90, 135, 180, 225, 270, 315];
       degAxes.forEach(deg => {
         const a = (deg - 90) * Math.PI / 180;
         ctx.beginPath();
