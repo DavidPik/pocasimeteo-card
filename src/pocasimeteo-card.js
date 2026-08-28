@@ -352,7 +352,7 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
 
       // --- Popisky světových stran ---
       ctx.fillStyle = theme.textColor;
-      ctx.font = 'bold 12px sans-serif'; // Čitelnější tučný font
+      ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
