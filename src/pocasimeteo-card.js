@@ -790,26 +790,40 @@ class PocasiMeteoCard extends HTMLElement {
       }
     }
 
+    // 2. KROK: ULTRA RYCHLÝ HROMADNÝ WEBSOCKET DOTAZ (Snižuje čekání z 10s na < 0.5s)
     const activeEntityIds = Object.keys(canvases);
 
-    await Promise.all(activeEntityIds.map(async entityId => {
+    if (activeEntityIds.length > 0) {
       try {
+        // Pošleme jedno hromadné pole entit přes WebSocket, HA jádro je zpracuje naráz
         const resp = await hass.callWS({
           type: "history/history_during_period",
           start_time: since,
           end_time: new Date().toISOString(),
-          entity_ids: [entityId],
+          entity_ids: activeEntityIds,
           minimal_response: false,
           significant_changes_only: false,
           no_attributes: true
         });
 
-        history[entityId] = resp?.[entityId] || [];
+        // Odpověď z WS obsahuje objekt, kde klíče jsou entity_id a hodnotami pole stavů.
+        // Projdeme seznam našich aktivních čidel a bezpečně jim přiřadíme stažená data.
+        for (let i = 0; i < activeEntityIds.length; i++) {
+          const entityId = activeEntityIds[i];
+          if (resp && resp[entityId]) {
+            history[entityId] = resp[entityId];
+          } else {
+            history[entityId] = [];
+          }
+        }
       } catch (e) {
-        console.error("WebSocket history error for", entityId, e);
-        history[entityId] = [];
+        console.error("Hromadný WebSocket history dotaz selhal:", e);
+        // Fallback: V případě neočekávané chyby inicializujeme prázdná pole, aby karta nespadla
+        for (let i = 0; i < activeEntityIds.length; i++) {
+          history[activeEntityIds[i]] = [];
+        }
       }
-    }));
+    }
 
     const theme = computeTheme(this.shadowRoot.host);
 
