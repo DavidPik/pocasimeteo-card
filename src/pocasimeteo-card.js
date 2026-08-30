@@ -914,24 +914,24 @@ class PocasiMeteoCard extends HTMLElement {
       if (points.length > 1) {
         const { canvas, tile, prettyName, legend, id } = item;
 
+        // ARCHITEKTURA FRONTENDU: Bezpečné zničení předchozí běžící instance Chart.js.
+        // Tím uvolníme posluchače responsive eventů z paměti RAM a zamezíme chybě ownerDocument.
         if (this._charts[entityId]) {
-          this._charts[entityId].destroy();
+          try {
+            this._charts[entityId].destroy();
+            this._charts[entityId] = null;
+          } catch (e) {
+            console.warn("Chyba při destrukci grafu:", e);
+          }
         }
         
         tile.style.backgroundColor = theme.bgColor;
         
-        // ÚPLNÝ RESET PLÁTNA: Najdeme obal, smažeme starý canvas a vložíme zcela nový,
-        // čímž stoprocentně eliminujeme jakékoliv zdvojení měřítka (DPR 2x) z paměti prohlížeče.
-        const currentWrapper = canvas.parentNode;
-        currentWrapper.innerHTML = '';
-        
-        const newCanvas = document.createElement('canvas');
-        newCanvas.classList.add('pm-graph');
-        newCanvas.style.backgroundColor = theme.bgColor;
-        currentWrapper.appendChild(newCanvas);
-        
-        // Aktualizujeme referenci pro novou instanci Chart.js
-        const activeCanvas = newCanvas;
+        // Použijeme stabilní referenci na původní existující canvas z pole canvases
+        const activeCanvas = canvas;
+        if (activeCanvas) {
+          activeCanvas.style.backgroundColor = theme.bgColor;
+        }
 
         if (id === 'vitr_smer') {
           this._charts[entityId] = new Chart(activeCanvas.getContext('2d'), {
