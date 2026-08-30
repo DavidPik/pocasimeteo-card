@@ -220,7 +220,7 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
           callbacks: {
             // Přepne formát času v nadpisu tooltipu na srozumitelný český formát HH:MM:SS
             title: function(context) {
-              if (context && context[0]) {
+              if (context && context.length > 0 && context[0].parsed) {
                 const parsedDate = new Date(context[0].parsed.x);
                 return 'Čas: ' + parsedDate.toLocaleTimeString('cs-CZ');
               }
@@ -839,7 +839,7 @@ class PocasiMeteoCard extends HTMLElement {
 
         section.container.appendChild(tile);
 
-        canvases[s.entity_id] = { canvas, tile, prettyName, legend, id: s.id };
+        canvases[s.entity_id] = { canvas, tile, prettyName: cleanGraphName, legend, id: s.id };
       }
     }
 
