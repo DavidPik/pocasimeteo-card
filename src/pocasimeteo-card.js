@@ -203,8 +203,47 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
       responsive: true,
       maintainAspectRatio: false,
       resizeDelay: 10,
-      plugins: { tooltip: {}, legend: { display: false } },
       layout: { padding: { top: 8, bottom: 8, left: 6, right: 8 } },
+      plugins: { 
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          mode: 'index',
+          intersect: false,
+          backgroundColor: 'rgba(28, 28, 28, 0.95)',
+          titleColor: '#fff',
+          bodyColor: '#fff',
+          borderColor: 'rgba(255, 255, 255, 0.15)',
+          borderWidth: 1,
+          cornerRadius: 6,
+          padding: 10,
+          callbacks: {
+            // Přepne formát času v nadpisu tooltipu na srozumitelný český formát HH:MM:SS
+            title: function(context) {
+              if (context && context[0]) {
+                const parsedDate = new Date(context[0].parsed.x);
+                return 'Čas: ' + parsedDate.toLocaleTimeString('cs-CZ');
+              }
+              return '';
+            },
+            // Zpřehlední výpis hodnoty pod časem
+            label: function(context) {
+              const labelText = context.dataset.label || '';
+              const pointValue = context.parsed.y;
+              
+              if (labelText) {
+                // Pokud jde o tečku Minima/Maxima, vrátíme popisek tak, jak je
+                if (labelText.includes('Min') || labelText.includes('Max')) {
+                  return labelText;
+                }
+                // Pro standardní průběhovou čáru vypíšeme: "Aktuální hodnota: X"
+                return 'Hodnota: ' + pointValue.toFixed(1);
+              }
+              return '';
+            }
+          }
+        }
+      },
       scales: {
         x: {
           type: 'time',
@@ -242,10 +281,7 @@ function computeChartGeometry(chartArea) {
 /**
  * ARCHITEKTURA FRONTENDU: Vlastní Canvas plugin pro detailní vykreslení větrné růžice.
  */
-/**
- * ARCHITEKTURA FRONTENDU: Vlastní Canvas plugin pro detailní vykreslení větrné růžice.
- * OPRAVENÁ VERZE: Zamezuje vrstvení grafiky, zmenšuje poloměr mřížky a dává prostor popiskům.
- */
+
 function createWindRosePlugin(theme, points, sensorAttrs) {
   const avg = typeof sensorAttrs.vitr_smer_avg === 'number' ? sensorAttrs.vitr_smer_avg : 0;
   const mode = typeof sensorAttrs.vitr_smer_mode === 'number' ? sensorAttrs.vitr_smer_mode : 0;
@@ -270,10 +306,9 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
         const dy = chart.$mouse.y - cy;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        // Zmenšený akční rádius pro detekci myši (odpovídá nové velikosti mřížky)
         if (dist > R * 0.80) {
           chart.$windHover = null;
-          chart.render(); // OPRAVA: render() čistí plátno, draw() vrstvil grafiku
+          chart.render();
           return;
         }
 
@@ -287,12 +322,12 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
           angle
         };
 
-        chart.render(); // OPRAVA: Použit render() namísto draw()
+        chart.render();
       });
 
       canvas.addEventListener('mouseleave', () => {
         chart.$windHover = null;
-        chart.render(); // OPRAVA: Použit render() namísto draw()
+        chart.render();
       });
     },
 
@@ -308,8 +343,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       ctx.strokeStyle = GRID_COLOR;
       ctx.lineWidth = 1;
 
-      // OPRAVA: Všechny kružnice a sektory škálujeme do 75 % poloměru (R * 0.75),
-      // čímž vytvoříme dostatek místa pro textové popisky na okrajích
       const activeRadius = R * 0.85;
 
       // --- Kružnice mřížky ---
@@ -356,7 +389,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Popisky umístíme kousek za hranici aktivního poloměru růžice
       const offsetText = activeRadius + 22;
 
       WIND_DIR_LABELS.forEach((label, i) => {
@@ -400,7 +432,7 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       ctx.lineTo(cx + Math.cos(modeAngle) * modeLineLen, cy + Math.sin(modeAngle) * modeLineLen);
       ctx.stroke();
 
-      // --- Interaktivní Tooltip ---
+      // --- Interaktivní Sjednocený Tooltip ---
       if (chart.$windHover && chart.$mouse) {
         const { index, value } = chart.$windHover;
         const { x: mx, y: my } = chart.$mouse;
@@ -414,33 +446,43 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
 
-        const paddingX = 8;
+        // Sjednocené vnitřní odsazení a rozměry boxu (padding: 10px)
+        const padX = 10;
+        const padY = 10;
         const textWidth = ctx.measureText(tooltipText).width;
-        const boxWidth = textWidth + paddingX * 2;
-        const boxHeight = 20;
+        const boxWidth = textWidth + padX * 2;
+        const boxHeight = 16 + padY * 2;
 
-        let tx = mx + 10;
-        let ty = my - boxHeight - 10;
+        let tx = mx + 12;
+        let ty = my - boxHeight - 12;
 
         if (tx + boxWidth > chart.width) tx = chart.width - boxWidth - 4;
         if (chart.chartArea && chart.chartArea.top > ty) {
-          ty = my + 10;
+          ty = my + 12;
         }
 
-        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        // Vizuální styl: Tmavé zaoblené moderní okno z LineChart grafů
+        ctx.shadowColor = 'rgba(0,0,0,0.15)';
         ctx.shadowBlur = 6;
-        ctx.fillStyle = `${theme.bgColor}f0`;
-        ctx.strokeStyle = `${theme.textColor}80`;
-        ctx.lineWidth = 1.5;
+        ctx.shadowOffsetY = 2;
+        ctx.fillStyle = 'rgba(28, 28, 28, 0.95)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
 
+        // Kreslení zaobleného obdélníku s poloměrem 6px (shodně s cornerRadius)
         ctx.beginPath();
-        ctx.rect(tx, ty, boxWidth, boxHeight);
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(tx, ty, boxWidth, boxHeight, 6);
+        } else {
+          ctx.rect(tx, ty, boxWidth, boxHeight);
+        }
         ctx.fill();
         ctx.stroke();
 
+        // Vykreslení čistě bílého textu
         ctx.shadowColor = 'transparent';
-        ctx.fillStyle = theme.textColor;
-        ctx.fillText(tooltipText, tx + paddingX, ty + boxHeight / 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(tooltipText, tx + padX, ty + boxHeight / 2);
 
         ctx.restore();
       }
@@ -558,8 +600,8 @@ class PocasiMeteoCard extends HTMLElement {
   _initialize() {
     const style = document.createElement('style');
     let css = '.pm-card { padding:0; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:0; }';
-    css += '.pm-header-section { padding:16px; background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; gap:12px; }';
-    css += '.pm-header-top { display:flex; justify-content:space-between; align-items:flex-start; font-size:20px; font-weight:600; }';
+    css +='.pm-header-section { padding:20px; background:linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%); border-bottom:1px solid rgba(255,255,255,0.12); display:flex; flex-direction:column; gap:14px; }' +
+    css +='.pm-header-bottom { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:20px; }' +
     css += '.pm-header-title { display:flex; flex-direction:column; gap:4px; }';
     css += '.pm-header-timestamp { opacity:0.7; font-size:13px; text-align:right; flex-grow:1; padding-right:12px; }';
     css += '.pm-header-bottom { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }';
@@ -752,11 +794,22 @@ class PocasiMeteoCard extends HTMLElement {
         tile.classList.add('pm-graph-tile');
   
         const unit = sState.attributes.unit_of_measurement || '';
-        const prettyName = sState.attributes.friendly_name || s.id;
+        const rawFriendlyName = sState.attributes.friendly_name || s.id;
+        
+        // Odřízneme název stanice (friendly_name z configu) z popisku grafu,
+        // aby nadpis nebyl zbytečně dlouhý a duplicitní (např. "GAR632 Teplota venkovní" -> "Teplota venkovní")
+        const stationTitle = (entity.attributes.friendly_name || '').theme || '';
+        let cleanGraphName = rawFriendlyName;
+        if (stationTitle && rawFriendlyName.includes(stationTitle)) {
+          cleanGraphName = rawFriendlyName.replace(stationTitle, '').trim();
+        }
 
         const titleElement = document.createElement('div');
         titleElement.classList.add('pm-graph-title');
-        titleElement.textContent = prettyName + (unit ? ` - ${unit}` : '');
+        titleElement.style.fontSize = '15px';
+        titleElement.style.fontWeight = '500';
+        titleElement.style.letterSpacing = '0.3px';
+        titleElement.textContent = cleanGraphName + (unit ? ' (' + unit + ')' : '');
 
         const canvas = document.createElement('canvas');
         canvas.classList.add('pm-graph');
