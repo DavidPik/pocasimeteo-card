@@ -105,11 +105,13 @@ function buildWindRose(points) {
 function historyToPoints(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.map(p => {
-    const rawTs = p.lu || p.last_changed || p.last_updated;
+    // ARCHITEKTURA FRONTENDU: Podpora pro zkrácené klíče z WebSocket API (lc = last_changed_ts, s = state)
+    const rawTs = p.lc || p.lu || p.last_changed || p.last_updated;
     const rawState = p.s !== undefined ? p.s : p.state;
 
     if (!rawTs || rawState === undefined) return null;
 
+    // Pokud je čas ve formátu Unix timestampu (float/int), vynásobíme ho 1000 pro JavaScript milisekundy
     const ts = typeof rawTs === 'number' ? rawTs * 1000 : Date.parse(rawTs);
     const val = Number(rawState);
 
