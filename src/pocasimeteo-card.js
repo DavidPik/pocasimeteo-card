@@ -709,9 +709,11 @@ class PocasiMeteoCard extends HTMLElement {
     };
 
     const stateText = conditionTranslations[entity.state] || entity.state; 
-    const lokalita = d.lokalita_stanice || d.friendly_name || 'Meteostanice';
+    const lokalita = d.lokalita_stanice || 'Meteostanice';
+    const staniceKod = d.friendly_name ? ` ${d.friendly_name}` : '';
 
-    headerTitle.textContent = `${lokalita} — ${stateText}`;
+    // ARCHITEKTURA FRONTENDU: Spojíme lokalitu a kód stanice do záhlaví (např. "Hostivice GAR632 — Slunečno")
+    headerTitle.textContent = `${lokalita}${staniceKod} — ${stateText}`;
     headerTimestamp.textContent = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
     
     const temp = entity.attributes.temperature !== undefined ? entity.attributes.temperature : '--';
@@ -798,12 +800,18 @@ class PocasiMeteoCard extends HTMLElement {
         const unit = sState.attributes.unit_of_measurement || '';
         const rawFriendlyName = sState.attributes.friendly_name || s.id;
         
-        // Odřízneme název stanice (friendly_name z configu) z popisku grafu,
-        // aby nadpis nebyl zbytečně dlouhý a duplicitní (např. "GAR632 Teplota venkovní" -> "Teplota venkovní")
-        const stationTitle = (entity.attributes.friendly_name || '').theme || '';
+        // ARCHITEKTURA FRONTENDU: Bezpečně získáme čistý kód stanice z hlavní weather entity
+        const stationTitle = entity.attributes.friendly_name || '';
         let cleanGraphName = rawFriendlyName;
-        if (stationTitle && rawFriendlyName.includes(stationTitle)) {
-          cleanGraphName = rawFriendlyName.replace(stationTitle, '').trim();
+        
+        if (stationTitle && rawFriendlyName.indexOf(stationTitle) === 0) {
+          // Odřízneme kód stanice z úvodu názvu senzoru (např. "GAR632 Teplota venkovní" -> "Teplota venkovní")
+          cleanGraphName = rawFriendlyName.substring(stationTitle.length).trim();
+        }
+
+        // První písmeno očštěného názvu pro jistotu převedeme na velké
+        if (cleanGraphName.length > 0) {
+          cleanGraphName = cleanGraphName.charAt(0).toUpperCase() + cleanGraphName.slice(1);
         }
 
         const titleElement = document.createElement('div');
