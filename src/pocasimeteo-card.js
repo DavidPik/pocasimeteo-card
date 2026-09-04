@@ -578,34 +578,30 @@ class PocasiMeteoCard extends HTMLElement {
 
     this._updateVisualHeader(entity);
 
-    const currentApiTimestamp = entity.attributes.timestamp;
+    // ARCHITEKTURA FRONTENDU: Reaktivní pojistka. Grafy překreslíme vždy, pokud se v systému 
+    // změnila data historie, délka fronty, nebo dorazily čerstvé statistiky sensor_stats.
     const nowTs = Date.now();
-    const timeDifference = nowTs - this._lastFetch;
+    const currentApiTimestamp = entity.attributes.timestamp || '';
     const currentQueue = entity.attributes.history_queue_length || 0;
-    const hasStats = entity.attributes.sensor_stats && Object.keys(entity.attributes.sensor_stats).length > 0;
-    const oldHasStats = this._hadStats || false;
-    
-    // ARCHITEKTURA FRONTENDU: Optimalizační pojistka. Grafy překreslíme pouze při novém API update,
-    // nebo pokud background worker v Pythonu právě dokončil asynchronní výpočty statistik v DB.
+    const currentStatsStr = JSON.stringify(entity.attributes.sensor_stats || {});
+
+    // Pevná časová pojistka pro ochranu před zacyklením CPU (maximálně 1 průchod za 10 vteřin při běžném kmitání myši)
+    const timeDifference = nowTs - this._lastFetch;
+
     if (this._lastApiTimestamp === currentApiTimestamp && 
         this._lastQueueLength === currentQueue && 
-        oldHasStats === hasStats && 
-        timeDifference < 300000) {
+        this._lastStatsStr === currentStatsStr && 
+        timeDifference < 10000) {
       return;
     }
 
     if (this._rendering) return;
     this._rendering = true;
 
+    // Uložíme si kompletní otisk stavu pro příští porovnání
     this._lastApiTimestamp = currentApiTimestamp;
     this._lastQueueLength = currentQueue;
-    this._hadStats = hasStats;
-    this._lastFetch = nowTs;
-
-    if (this._rendering) return;
-    this._rendering = true;
-
-    this._lastApiTimestamp = currentApiTimestamp;
+    this._lastStatsStr = currentStatsStr;
     this._lastFetch = nowTs;
 
     setTimeout(() => {
@@ -613,7 +609,6 @@ class PocasiMeteoCard extends HTMLElement {
         this._rendering = false;
       });
     }, 50);
-  }
   
   _initialize() {
     const style = document.createElement('style');
