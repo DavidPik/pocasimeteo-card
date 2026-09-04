@@ -135,18 +135,18 @@ function hexToRgba(hex, alpha) {
 /**
  * ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Vytvoří konfiguraci pro čárový graf Chart.js.
  */
-function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsIntervalHours) {
-  const color = sensorAttrs.graph_color || '#3b82f6';
-  const isStepped = sensorAttrs.graph_style === 'stepped';
+function createLineChartConfig(points, cleanName, theme, s, statsIntervalHours) {
+  const color = s.graph_color || '#3b82f6';
+  const isStepped = s.graph_style === 'stepped';
   const textColor = theme.textColor;
 
-  const lastUpdateTs = sensorAttrs.timestamp ? Date.parse(sensorAttrs.timestamp) : Date.now();
   const endX = Date.now();
   const intervalMs = (statsIntervalHours || 24) * 3600 * 1000;
   const startX = endX - intervalMs;
 
-  const min = typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : 0;
-  const max = typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : (min + 1);
+  // ARCHITEKTURA FRONTENDU: Načtení statistik přímo z centralizovaného objektu "s"
+  const min = typeof s.stats_min === 'number' ? s.stats_min : 0;
+  const max = typeof s.stats_max === 'number' ? s.stats_max : (min + 1);
 
   // Vytvoříme bezpečné hranice osy Y přímo z hodnot z backendu s mírným přesahem (např. 5 %),
   // aby křivka nikdy neškrtala o horní nebo spodní okraj grafu
@@ -155,7 +155,7 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
   const finalMax = max + padding;
 
   // Bezpečné ošetření: Žádný graf s výjimkou teploty nesmí na ose Y začínat v záporných hodnotách
-  if (!prettyName.toLowerCase().includes('teplot') && !prettyName.toLowerCase().includes('temperature') && finalMin < 0) {
+  if (!cleanName.toLowerCase().includes('teplot') && !cleanName.toLowerCase().includes('temperature') && finalMin < 0) {
     finalMin = 0;
   }
 
@@ -176,7 +176,7 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
     data: {
       datasets: [
         {
-          label: prettyName,
+          label: cleanName,
           data: points,
           borderColor: color,
           backgroundColor: rgba,
@@ -186,14 +186,14 @@ function createLineChartConfig(points, prettyName, theme, sensorAttrs, statsInte
           borderWidth: 2
         },
         {
-          label: `Min: ${min.toFixed(1)}`,
+          label: 'Min: ' + min.toFixed(1),
           data: minPoint ? [{ x: minPoint.x, y: minPoint.y }] : [],
           pointRadius: 6,
           pointBackgroundColor: 'red',
           showLine: false
         },
         {
-          label: `Max: ${max.toFixed(1)}`,
+          label: 'Max: ' + max.toFixed(1),
           data: maxPoint ? [{ x: maxPoint.x, y: maxPoint.y }] : [],
           pointRadius: 6,
           pointBackgroundColor: 'green',
@@ -760,6 +760,7 @@ class PocasiMeteoCard extends HTMLElement {
   async _updateCharts(hass, entity) {
     const d = entity.attributes;
     const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
+    const statsObj = d.sensor_stats || {};
 
     const primaryGraphs = this.shadowRoot.getElementById('primary-graphs');
     const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
@@ -783,18 +784,16 @@ class PocasiMeteoCard extends HTMLElement {
       { type: 'secondary', container: secondaryGraphs }
     ];
 
-    for (const section of targetSections) {
+    targetSections.forEach(section => {
       const filteredMeta = sensorsMeta.filter(s =>
         s.type === section.type &&
         s.visible !== false &&
         !this.config.hide_sensors.includes(s.id)
       );
       
-      filteredMeta.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-      
-      for (const s of filteredMeta) {
+      filteredMeta.forEach(s => {
         const sState = hass.states[s.entity_id];
-        if (!sState) continue;
+        if (!sState) return;
 
         const tile = document.createElement('div');
         tile.classList.add('pm-graph-tile');
@@ -811,7 +810,7 @@ class PocasiMeteoCard extends HTMLElement {
           cleanGraphName = rawFriendlyName.substring(stationTitle.length).trim();
         }
 
-        // První písmeno očštěného názvu pro jistotu převedeme na velké
+        // První písmeno očištěného názvu pro jistotu převedeme na velké
         if (cleanGraphName.length > 0) {
           cleanGraphName = cleanGraphName.charAt(0).toUpperCase() + cleanGraphName.slice(1);
         }
@@ -846,21 +845,35 @@ class PocasiMeteoCard extends HTMLElement {
         chartWrapper.appendChild(canvas);
 
         tile.appendChild(titleElement);
-        tile.appendChild(chartWrapper); // Vložíme obal místo samotného canvasu
+        tile.appendChild(chartWrapper); 
         tile.appendChild(legend);
 
         section.container.appendChild(tile);
 
-        canvases[s.entity_id] = { canvas, tile, prettyName: cleanGraphName, legend, id: s.id };
-      }
-    }
+        // Do registru canvases bleskově O(1) rychlostí napárujeme konfiguraci i dynamické výpočty z DB
+        const currentStats = statsObj[s.id] || {};
+        canvases[s.entity_id] = { 
+          canvas, 
+          tile, 
+          prettyName: cleanGraphName, 
+          legend, 
+          id: s.id,
+          graph_color: s.graph_color,
+          graph_style: s.graph_style,
+          stats_min: currentStats.stats_min,
+          stats_max: currentStats.stats_max,
+          stats_avg: currentStats.stats_avg,
+          stats_mode: currentStats.stats_mode,
+          stats_var: currentStats.stats_var
+        };
+      });
+    });
 
-    // 2. KROK: ULTRA RYCHLÝ HROMADNÝ WEBSOCKET DOTAZ (Snižuje čekání z 10s na < 0.5s)
+    // 2. KROK: JEDINÝ HROMADNÝ WEBSOCKET DOTAZ
     const activeEntityIds = Object.keys(canvases);
 
     if (activeEntityIds.length > 0) {
       try {
-        // Pošleme jedno hromadné pole entit přes WebSocket, HA jádro je zpracuje naráz
         const resp = await hass.callWS({
           type: "history/history_during_period",
           start_time: since,
@@ -871,42 +884,39 @@ class PocasiMeteoCard extends HTMLElement {
           no_attributes: true
         });
 
-        // Odpověď z WS obsahuje objekt, kde klíče jsou entity_id a hodnotami pole stavů.
-        // Projdeme seznam našich aktivních čidel a bezpečně jim přiřadíme stažená data.
-        for (let i = 0; i < activeEntityIds.length; i++) {
-          const entityId = activeEntityIds[i];
+        activeEntityIds.forEach(entityId => {
           if (resp && resp[entityId]) {
             history[entityId] = resp[entityId];
           } else {
             history[entityId] = [];
           }
-        }
+        });
       } catch (e) {
         console.error("Hromadný WebSocket history dotaz selhal:", e);
-        // Fallback: V případě neočekávané chyby inicializujeme prázdná pole, aby karta nespadla
-        for (let i = 0; i < activeEntityIds.length; i++) {
-          history[activeEntityIds[i]] = [];
-        }
+        activeEntityIds.forEach(entityId => {
+          history[entityId] = [];
+        });
       }
     }
 
     const theme = computeTheme(this.shadowRoot.host);
 
-    for (const entityId of activeEntityIds) {
+    // 3. KROK: CYKLICKÉ VYVÁŽENÉ VYKRESLENÍ GRAFŮ V RAM PLÁTNA
+    activeEntityIds.forEach(entityId => {
       const item = canvases[entityId];
-      if (!item) continue;
+      if (!item) return;
 
       const sState = hass.states[entityId];
-      if (!sState) continue;
+      if (!sState) return;
 
-      const sensorAttrs = sState.attributes || {};
       const points = historyToPoints(history[entityId]);
 
       if (points.length === 0) {
         const val = Number(sState.state);
-        if (isNaN(val)) continue;
-        const now = Date.now();
-        points.push({ x: now - 60000, y: val }, { x: now, y: val });
+        if (!isNaN(val)) {
+          const now = Date.now();
+          points.push({ x: now - 60000, y: val }, { x: now, y: val });
+        }
       } else if (points.length === 1) {
         points.push({ x: Date.now(), y: points[0].y });
       }
@@ -914,8 +924,7 @@ class PocasiMeteoCard extends HTMLElement {
       if (points.length > 1) {
         const { canvas, tile, prettyName, legend, id } = item;
 
-        // ARCHITEKTURA FRONTENDU: Bezpečné zničení předchozí běžící instance Chart.js.
-        // Tím uvolníme posluchače responsive eventů z paměti RAM a zamezíme chybě ownerDocument.
+        // Bezpečné zničení předchozí běžící instance Chart.js
         if (this._charts[entityId]) {
           try {
             this._charts[entityId].destroy();
@@ -927,7 +936,6 @@ class PocasiMeteoCard extends HTMLElement {
         
         tile.style.backgroundColor = theme.bgColor;
         
-        // Použijeme stabilní referenci na původní existující canvas z pole canvases
         const activeCanvas = canvas;
         if (activeCanvas) {
           activeCanvas.style.backgroundColor = theme.bgColor;
@@ -947,83 +955,72 @@ class PocasiMeteoCard extends HTMLElement {
             },
             options: {
               responsive: true,
-              maintainAspectRatio: false, // Změňte na false, aby vyplnil wrapper
-              layout: {
-                padding: {
-                  top: 10,
-                  bottom: 10,
-                  left: 10,
-                  right: 10
-                }
-              },
+              maintainAspectRatio: false,
+              layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } },
               plugins: { 
                 legend: { display: false }, 
                 tooltip: { enabled: false } 
               },
-              scales: {
-                r: {
-                  display: false
-                }
-              }
+              scales: { r: { display: false } }
             },
-            plugins: [ createWindRosePlugin(theme, points, sensorAttrs) ]
+            plugins: [ createWindRosePlugin(theme, points, item) ] // Posíláme aktualizovaný item
           });
 
           legend.textContent = '';
 
-          const avgVal = typeof sensorAttrs.vitr_smer_avg === 'number' ? sensorAttrs.vitr_smer_avg : 0;
-          const modeVal = typeof sensorAttrs.vitr_smer_mode === 'number' ? sensorAttrs.vitr_smer_mode : 0;
-          const varVal = typeof sensorAttrs.vitr_smer_var === 'number' ? sensorAttrs.vitr_smer_var : 0;
+          const avgVal = typeof item.stats_avg === 'number' ? item.stats_avg : 0;
+          const modeVal = typeof item.stats_mode === 'number' ? item.stats_mode : 0;
+          const varVal = typeof item.stats_var === 'number' ? item.stats_var : 0;
 
           const labelsData = [
-            { color: '#ff0000', text: `Průměr: ${avgVal.toFixed(0)}° (${degToDirection(avgVal)})` },
-            { color: '#0000ff', text: `Mod: ${modeVal.toFixed(0)}° (${degToDirection(modeVal)})` },
-            { color: '#ffa500', text: `Rozptyl: ±${varVal.toFixed(0)}°` }
+            { color: '#ff0000', text: 'Průměr: ' + avgVal.toFixed(0) + '° (' + degToDirection(avgVal) + ')' },
+            { color: '#0000ff', text: 'Mod: ' + modeVal.toFixed(0) + '° (' + degToDirection(modeVal) + ')' },
+            { color: '#ffa500', text: 'Rozptyl: ±' + varVal.toFixed(0) + '°' }
           ];
 
-          labelsData.forEach(item => {
+          labelsData.forEach(lbl => {
             const itemDiv = document.createElement('div');
             itemDiv.classList.add('pm-legend-item');
             const colorSpan = document.createElement('span');
             colorSpan.classList.add('pm-legend-color');
-            colorSpan.style.background = item.color;
+            colorSpan.style.background = lbl.color;
             const textSpan = document.createElement('span');
-            textSpan.textContent = item.text;
+            textSpan.textContent = lbl.text;
             itemDiv.appendChild(colorSpan);
             itemDiv.appendChild(textSpan);
             legend.appendChild(itemDiv);
           });
         } else {
-          const minVal = typeof sensorAttrs.stats_min === 'number' ? sensorAttrs.stats_min : 0;
-          const maxVal = typeof sensorAttrs.stats_max === 'number' ? sensorAttrs.stats_max : 0;
+          // Pro standardní čárové grafy načteme minima/maxima z centralizovaného registru item
+          const minVal = typeof item.stats_min === 'number' ? item.stats_min : 0;
+          const maxVal = typeof item.stats_max === 'number' ? item.stats_max : 0;
           
           this._charts[entityId] = new Chart(
             activeCanvas.getContext('2d'),
-            createLineChartConfig(points, prettyName, theme, sensorAttrs, statsIntervalHours)
+            createLineChartConfig(points, prettyName, theme, item, statsIntervalHours)
           );
           
           legend.textContent = '';
           const lineLabels = [
-            { color: 'red', text: `Min: ${minVal.toFixed(1)}` },
-            { color: 'green', text: `Max: ${maxVal.toFixed(1)}` }
+            { color: 'red', text: 'Min: ' + minVal.toFixed(1) },
+            { color: 'green', text: 'Max: ' + maxVal.toFixed(1) }
           ];
 
-          lineLabels.forEach(item => {
+          lineLabels.forEach(lbl => {
             const itemDiv = document.createElement('div');
             itemDiv.classList.add('pm-legend-item');
             const colorSpan = document.createElement('span');
             colorSpan.classList.add('pm-legend-color');
-            colorSpan.style.background = item.color;
+            colorSpan.style.background = lbl.color;
             const textSpan = document.createElement('span');
-            textSpan.textContent = item.text;
+            textSpan.textContent = lbl.text;
             itemDiv.appendChild(colorSpan);
             itemDiv.appendChild(textSpan);
             legend.appendChild(itemDiv);
           });
         }
       }
-    }
+    });
   }
-}
 
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
