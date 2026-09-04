@@ -1021,6 +1021,7 @@ class PocasiMeteoCard extends HTMLElement {
         }
       }
     });
-  };
+  }
+}
 
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
