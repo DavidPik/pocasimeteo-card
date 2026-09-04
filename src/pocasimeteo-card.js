@@ -581,10 +581,26 @@ class PocasiMeteoCard extends HTMLElement {
     const currentApiTimestamp = entity.attributes.timestamp;
     const nowTs = Date.now();
     const timeDifference = nowTs - this._lastFetch;
-
-    if (this._lastApiTimestamp === currentApiTimestamp && timeDifference < 300000) {
+    const currentQueue = entity.attributes.history_queue_length || 0;
+    const hasStats = entity.attributes.sensor_stats && Object.keys(entity.attributes.sensor_stats).length > 0;
+    const oldHasStats = this._hadStats || false;
+    
+    // ARCHITEKTURA FRONTENDU: Optimalizační pojistka. Grafy překreslíme pouze při novém API update,
+    // nebo pokud background worker v Pythonu právě dokončil asynchronní výpočty statistik v DB.
+    if (this._lastApiTimestamp === currentApiTimestamp && 
+        this._lastQueueLength === currentQueue && 
+        oldHasStats === hasStats && 
+        timeDifference < 300000) {
       return;
     }
+
+    if (this._rendering) return;
+    this._rendering = true;
+
+    this._lastApiTimestamp = currentApiTimestamp;
+    this._lastQueueLength = currentQueue;
+    this._hadStats = hasStats;
+    this._lastFetch = nowTs;
 
     if (this._rendering) return;
     this._rendering = true;
