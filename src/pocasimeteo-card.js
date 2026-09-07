@@ -271,6 +271,12 @@ function createLineChartConfig(item, points, statsIntervalHours) {
   };
 }
 
+function computeChartGeometry(chartArea) {
+  const cx = chartArea.left + chartArea.width / 2;
+  const cy = chartArea.top + chartArea.height / 2;
+  const R = Math.min(chartArea.width, chartArea.height) / 2;
+  return { cx, cy, R };
+}
 
 /**
  * Plugin pro větrnou růžici — sjednocená signatura (item, points, statsIntervalHours)
@@ -474,6 +480,280 @@ function createWindRosePlugin(item, points, statsIntervalHours) {
     }
   };
 }
+
+/**
+ * Třída reprezentující samotnou Home Assistant Lovelace kartu PočasíMeteo.
+ */
+class PocasiMeteoCard extends HTMLElement {
+  constructor() {
+    super();
+    this._initialized = false;
+    this._rendering = false;
+    this._charts = {};
+    this._lastApiTimestamp = null;
+    this._lastFetch = 0;
+    this._resizeObserver = null;
+    this._currentHass = null;
+    this._initialResizeDone = false;
+  }
+
+  setConfig(config) {
+    if (!config.entity) {
+      throw new Error('entity is required');
+    }
+    this.config = { show_graphs: true, hide_sensors: [], graphs_per_row: 2, ...config };
+
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: 'open' });
+    }
+  }
+
+  connectedCallback() {
+    this._resizeObserver = new ResizeObserver(() => {
+      if (!this._initialResizeDone) {
+        this._initialResizeDone = true;
+        if (this._currentHass) {
+          const entity = this._currentHass.states[this.config.entity];
+          if (entity?.attributes?.sensors) {
+            this._updateCharts(this._currentHass, entity);
+          }
+        }
+        return;
+      }
+      if (this._currentHass && this._initialized && !this._rendering) {
+        const entity = this._currentHass.states[this.config.entity];
+        if (entity?.attributes?.sensors) {
+          this._rendering = true;
+          setTimeout(() => {
+            this._updateCharts(this._currentHass, entity).finally(() => {
+              this._rendering = false;
+            });
+          }, 50);
+        }
+      }
+    });
+    this._resizeObserver.observe(this);
+  }
+
+  disconnectedCallback() {
+    this._resizeObserver?.disconnect();
+  }
+
+  set hass(hass) {
+    this._currentHass = hass;
+    const entity = hass.states[this.config.entity];
+
+    if (!this._initialized) {
+      this._initialize();
+      this._initialized = true;
+    }
+
+    if (!entity?.attributes?.sensors) {
+      const card = this.shadowRoot.querySelector('.pm-card');
+      if (card) {
+        card.textContent = '';
+        const h2 = document.createElement('h2');
+        h2.textContent = 'PočasíMeteo';
+        const p = document.createElement('p');
+        p.style.opacity = '0.7';
+        p.textContent = 'Backendová komponenta není dostupná (chybí data senzorů).';
+        card.appendChild(h2);
+        card.appendChild(p);
+      }
+      return;
+    }
+
+    this._updateVisualHeader(entity);
+
+    // ARCHITEKTURA FRONTENDU: Reaktivní pojistka. Grafy překreslíme vždy, pokud se v systému 
+    // změnila data historie, délka fronty, nebo dorazily čerstvé statistiky sensor_stats.
+    const nowTs = Date.now();
+    const currentApiTimestamp = entity.attributes.timestamp || '';
+    const currentQueue = entity.attributes.history_queue_length || 0;
+    const currentStatsStr = JSON.stringify(entity.attributes.sensor_stats || {});
+
+    // Pevná časová pojistka pro ochranu před zacyklením CPU (maximálně 1 průchod za 10 vteřin při běžném kmitání myši)
+    const timeDifference = nowTs - this._lastFetch;
+
+    if (this._lastApiTimestamp === currentApiTimestamp && 
+        this._lastQueueLength === currentQueue && 
+        this._lastStatsStr === currentStatsStr && 
+        timeDifference < 10000) {
+      return;
+    }
+
+    if (this._rendering) return;
+    this._rendering = true;
+
+    // Uložíme si kompletní otisk stavu pro příští porovnání
+    this._lastApiTimestamp = currentApiTimestamp;
+    this._lastQueueLength = currentQueue;
+    this._lastStatsStr = currentStatsStr;
+    this._lastFetch = nowTs;
+
+    setTimeout(() => {
+      this._updateCharts(hass, entity).finally(() => {
+        this._rendering = false;
+      });
+    }, 50);
+  
+  _initialize() {
+    const style = document.createElement('style');
+    let css = '.pm-card { padding:0; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:0; }';
+    css +='.pm-header-section { padding:20px; background:linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%); border-bottom:1px solid rgba(255,255,255,0.12); display:flex; flex-direction:column; gap:14px; }';
+    css +='.pm-header-bottom { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:20px; }';
+    // ARCHITEKTURA FRONTENDU: Vnutíme horní lince flexbox a vycentrujeme lokalitu i čas do identické výšky
+    css += '.pm-header-top { display:flex; justify-content:space-between; align-items:center; width:100%; }';
+    css += '.pm-header-title { display:flex; flex-direction:column; gap:2px; }';
+    css += '.pm-header-timestamp { opacity:0.7; font-size:13px; text-align:right; flex-grow:1; padding-right:12px; }';
+    css += '.pm-header-bottom { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }';
+    css += '.pm-header-main { font-size:48px; font-weight:300; }';
+    css += '.pm-header-details { display:flex; flex-direction:column; gap:6px; font-size:15px; opacity:0.85; text-align:right; padding-right:12px; min-width:260px; white-space:nowrap; }';
+    css += '.pm-primary-section { background:rgba(255,255,255,0.03); padding:16px; border-bottom:1px solid rgba(255,255,255,0.1); }';
+    css += '.pm-secondary-section { background:rgba(255,255,255,0.05); padding:16px; }';
+    
+    // Zde je klíčová změna: flex-wrap: wrap a správný reset pro kontejnery grafů
+    css += '.pm-graphs { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; align-items: stretch; width: 100%; box-sizing: border-box; }';
+    
+    // Dlaždice dostane dynamický výpočet šířky, flex-grow pro vyplnění řádku a striktní min-width 200px
+    css += '.pm-graph-tile { box-sizing: border-box; flex: 0 1 calc((100% - (var(--graphs-per-row) - 1) * 16px) / var(--graphs-per-row)); min-width: 200px; background: var(--ha-card-background,#1c1c1c); border-radius: 12px; padding: 8px; box-shadow: var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2)); display: flex; flex-direction: column; overflow: hidden; }';
+    
+    css += '.pm-graph-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; padding: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }';
+    css += '.pm-graph { width:100%; height:180px; display:block; }'; // Zajištění, že canvas vyplní šířku dlaždice
+    css += '.pm-legend { margin-top:0px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:14px; opacity:0.8; padding: 4px; }';
+    css += '.pm-legend-item { display:flex; align-items:center; gap:4px; }';
+    css += '.pm-legend-color { width:12px; height:12px; border-radius:2px; }';
+
+    // Pokud se kvůli min-width 200px dlaždice zalomí a nevleze se jich vedle sebe požadovaný počet,
+    // dovolíme jim na malých displejích vyplnit řádek, ale na velkých budou držet přesný sloupec.
+    css += '@media (max-width: 480px) { .pm-graph-tile { flex-grow: 1; } }';
+
+    style.textContent = css;
+
+    const card = document.createElement('ha-card');
+    card.classList.add('pm-card');
+
+    const headerSec = document.createElement('div');
+    headerSec.id = 'header-section';
+    headerSec.classList.add('pm-header-section');
+
+    const topDiv = document.createElement('div');
+    topDiv.classList.add('pm-header-top');
+    const titleDiv = document.createElement('div');
+    titleDiv.id = 'header-title';
+    titleDiv.classList.add('pm-header-title');
+    const timeDiv = document.createElement('div');
+    timeDiv.id = 'header-timestamp';
+    timeDiv.classList.add('pm-header-timestamp');
+    topDiv.appendChild(titleDiv);
+    topDiv.appendChild(timeDiv);
+
+    const bottomDiv = document.createElement('div');
+    bottomDiv.classList.add('pm-header-bottom');
+    const mainDiv = document.createElement('div');
+    mainDiv.id = 'header-main';
+    mainDiv.classList.add('pm-header-main');
+    const detailsDiv = document.createElement('div');
+    detailsDiv.id = 'header-details';
+    detailsDiv.classList.add('pm-header-details');
+    bottomDiv.appendChild(mainDiv);
+    bottomDiv.appendChild(detailsDiv);
+
+    headerSec.appendChild(topDiv);
+    headerSec.appendChild(bottomDiv);
+
+    const primarySec = document.createElement('div');
+    primarySec.classList.add('pm-primary-section');
+    const primaryGraphs = document.createElement('div');
+    primaryGraphs.id = 'primary-graphs';
+    primaryGraphs.classList.add('pm-graphs');
+    primarySec.appendChild(primaryGraphs);
+
+    const secondarySec = document.createElement('div');
+    secondarySec.classList.add('pm-secondary-section');
+    const secondaryGraphs = document.createElement('div');
+    secondaryGraphs.id = 'secondary-graphs';
+    secondaryGraphs.classList.add('pm-graphs');
+    secondarySec.appendChild(secondaryGraphs);
+
+    card.appendChild(headerSec);
+    card.appendChild(primarySec);
+    card.appendChild(secondarySec);
+
+    this.shadowRoot.appendChild(style);
+    this.shadowRoot.appendChild(card);
+  }
+
+  _updateVisualHeader(entity) {
+    const d = entity.attributes;
+    const headerTitle = this.shadowRoot.getElementById('header-title');
+    const headerTimestamp = this.shadowRoot.getElementById('header-timestamp');
+    const headerMain = this.shadowRoot.getElementById('header-main');
+    const headerDetails = this.shadowRoot.getElementById('header-details');
+
+    const conditionTranslations = {
+      'sunny': 'Slunečno',
+      'clear-night': 'Jasno',
+      'cloudy': 'Oblačno',
+      'fog': 'Mlha',
+      'hail': 'Krupobití',
+      'lightning': 'Bouřka',
+      'lightning-rainy': 'Bouřka s deštěm',
+      'partlycloudy': 'Polojasno',
+      'pouring': 'Silný déšť',
+      'rainy': 'Déšť',
+      'snowy': 'Sněžení',
+      'snowy-rainy': 'Sníh s deštěm',
+      'windy': 'Větrno',
+      'windy-variant': 'Silný vítr'
+    };
+
+    const stateText = conditionTranslations[entity.state] || entity.state; 
+    const lokalita = d.lokalita_stanice || 'Meteostanice';
+    const staniceKod = d.friendly_name ? ` ${d.friendly_name}` : '';
+
+    // ARCHITEKTURA FRONTENDU: Spojíme lokalitu a kód stanice do záhlaví (např. "Hostivice GAR632 — Slunečno")
+    headerTitle.textContent = `${lokalita}${staniceKod} — ${stateText}`;
+    headerTimestamp.textContent = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
+    
+    const temp = entity.attributes.temperature !== undefined ? entity.attributes.temperature : '--';
+    headerMain.textContent = `${temp} °C`;
+
+    const pressure = entity.attributes.pressure !== undefined ? entity.attributes.pressure : '--';
+    const humidity = entity.attributes.humidity !== undefined ? entity.attributes.humidity : '--';
+    
+    let windSpeed = '--';
+    if (entity.attributes.wind_speed != null) {
+      windSpeed = (parseFloat(entity.attributes.wind_speed) / 3.6).toFixed(1);
+    }
+    
+    let windGust = '--';
+    if (entity.attributes.wind_gust != null) {
+      windGust = (parseFloat(entity.attributes.wind_gust) / 3.6).toFixed(1);
+    }
+    
+    let windDirectionText = '';
+    if (entity.attributes.wind_bearing != null) {
+      windDirectionText = ` ${degToDirection(entity.attributes.wind_bearing)}`;
+    }
+    
+    const kompletniVitrText = `${windSpeed} / ${windGust} m/s${windDirectionText}`;
+    const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
+
+    headerDetails.textContent = '';
+    const items = [
+      `Tlak vzduchu: ${pressure} hPa`,
+      `Vlhkost: ${humidity} %`,
+      `Síla větru: ${kompletniVitrText}`,
+      `Srážky dnes: ${srazkyDen} mm`
+    ];
+
+    items.forEach(text => {
+      const div = document.createElement('div');
+      div.textContent = text;
+      headerDetails.appendChild(div);
+    });
+  }
 
 async _updateCharts(hass, entity) {
   const d = entity.attributes;
