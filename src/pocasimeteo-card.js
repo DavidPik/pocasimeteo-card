@@ -135,32 +135,41 @@ function hexToRgba(hex, alpha) {
 /**
  * ARCHITEKTURA FRONTENDU / NÁVAZNOST NA BACKEND: Vytvoří konfiguraci pro čárový graf Chart.js.
  */
-function createLineChartConfig(points, cleanName, theme, s, statsIntervalHours) {
-  const color = s.graph_color || '#3b82f6';
-  const isStepped = s.graph_style === 'stepped';
+function createLineChartConfig(item, points, statsIntervalHours) {
+  const theme = item.theme || { textColor: '#fff' };
+  const color = item.color || '#3b82f6';
+  const isStepped = item.style === 'stepped';
   const textColor = theme.textColor;
 
   const endX = Date.now();
   const intervalMs = (statsIntervalHours || 24) * 3600 * 1000;
   const startX = endX - intervalMs;
 
-  // ARCHITEKTURA FRONTENDU: Načtení statistik přímo z centralizovaného objektu "s"
-  const min = typeof s.stats_min === 'number' ? s.stats_min : 0;
-  const max = typeof s.stats_max === 'number' ? s.stats_max : (min + 1);
+  // MIN/MAX z backendu (sensor_stats) nebo fallback z historie
+  let min = typeof item.min === 'number' ? item.min : null;
+  let max = typeof item.max === 'number' ? item.max : null;
 
-  // Vytvoříme bezpečné hranice osy Y přímo z hodnot z backendu s mírným přesahem (např. 5 %),
-  // aby křivka nikdy neškrtala o horní nebo spodní okraj grafu
+  if ((min === null || max === null) && points && points.length > 0) {
+    const ys = points.map(p => p.y);
+    min = min ?? Math.min(...ys);
+    max = max ?? Math.max(...ys);
+  }
+
+  if (min === null || max === null) {
+    min = 0;
+    max = 1;
+  }
+
   const padding = (max - min) * 0.05 || 1;
   let finalMin = min - padding;
   const finalMax = max + padding;
 
-  // Bezpečné ošetření: Žádný graf s výjimkou teploty nesmí na ose Y začínat v záporných hodnotách
-  if (!cleanName.toLowerCase().includes('teplot') && !cleanName.toLowerCase().includes('temperature') && finalMin < 0) {
+  if (!item.title.toLowerCase().includes('teplot') &&
+      !item.title.toLowerCase().includes('temperature') &&
+      finalMin < 0) {
     finalMin = 0;
   }
 
-  // Hledání bodů min/max v poli upravíme tak, aby našlo bod, který je hodnotě z backendu NEJBLÍŽE,
-  // místo rigidního porovnávání na setiny, které kvůli zaokrouhlování v DB selhává:
   let minPoint = null;
   let maxPoint = null;
 
@@ -176,7 +185,7 @@ function createLineChartConfig(points, cleanName, theme, s, statsIntervalHours) 
     data: {
       datasets: [
         {
-          label: cleanName,
+          label: item.title,
           data: points,
           borderColor: color,
           backgroundColor: rgba,
@@ -220,7 +229,6 @@ function createLineChartConfig(points, cleanName, theme, s, statsIntervalHours) 
           cornerRadius: 6,
           padding: 10,
           callbacks: {
-            // Přepne formát času v nadpisu tooltipu na srozumitelný český formát HH:MM:SS
             title: function(context) {
               if (context && context.length > 0 && context[0].parsed) {
                 const parsedDate = new Date(context[0].parsed.x);
@@ -228,17 +236,14 @@ function createLineChartConfig(points, cleanName, theme, s, statsIntervalHours) 
               }
               return '';
             },
-            // Zpřehlední výpis hodnoty pod časem
             label: function(context) {
               const labelText = context.dataset.label || '';
               const pointValue = context.parsed.y;
               
               if (labelText) {
-                // Pokud jde o tečku Minima/Maxima, vrátíme popisek tak, jak je
                 if (labelText.includes('Min') || labelText.includes('Max')) {
                   return labelText;
                 }
-                // Pro standardní průběhovou čáru vypíšeme: "Aktuální hodnota: X"
                 return 'Hodnota: ' + pointValue.toFixed(1);
               }
               return '';
@@ -284,10 +289,13 @@ function computeChartGeometry(chartArea) {
  * ARCHITEKTURA FRONTENDU: Vlastní Canvas plugin pro detailní vykreslení větrné růžice.
  */
 
-function createWindRosePlugin(theme, points, sensorAttrs) {
-  const avg = typeof sensorAttrs.vitr_smer_avg === 'number' ? sensorAttrs.vitr_smer_avg : 0;
-  const mode = typeof sensorAttrs.vitr_smer_mode === 'number' ? sensorAttrs.vitr_smer_mode : 0;
-  const vari = typeof sensorAttrs.vitr_smer_var === 'number' ? sensorAttrs.vitr_smer_var : 0;
+function createWindRosePlugin(item, points, statsIntervalHours) {
+  const theme = item.theme || { textColor: '#fff' };
+
+  const avg = Number(item.avg ?? 0);
+  const mode = Number(item.mod ?? 0);
+  const vari = Number(item.var ?? 0);
+
   const bins = buildWindRose(points);
 
   return {
@@ -347,14 +355,12 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
 
       const activeRadius = R * 0.85;
 
-      // --- Kružnice mřížky ---
       [0.2, 0.4, 0.6, 0.8, 1.0].forEach(f => {
         ctx.beginPath();
         ctx.arc(cx, cy, activeRadius * f, 0, Math.PI * 2);
         ctx.stroke();
       });
 
-      // --- Hlavní osy ---
       const degAxes = [0, 45, 90, 135, 180, 225, 270, 315];
       degAxes.forEach(deg => {
         const a = (deg - 90) * Math.PI / 180;
@@ -364,7 +370,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
         ctx.stroke();
       });
 
-      // --- Sektory větrné růžice ---
       const sectorColor = '#009688';
 
       for (let i = 0; i < 16; i++) {
@@ -385,7 +390,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
         ctx.stroke();
       }
 
-      // --- Popisky světových stran ---
       ctx.fillStyle = theme.textColor;
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
@@ -400,7 +404,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
         ctx.fillText(label, x, y);
       });
 
-      // --- Výpočet úhlů pro průměr / mod / varianci ---
       const avgLineLen = activeRadius;
       const modeLineLen = activeRadius - 15;
       const offsetVar = activeRadius - 5;
@@ -410,7 +413,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       const startVar = (avg - vari - 90) * Math.PI / 180;
       const endVar = (avg + vari - 90) * Math.PI / 180;
 
-      // --- Variance (Rozptyl) ---
       ctx.fillStyle = 'rgba(255,165,0,0.22)';
       ctx.beginPath();
       ctx.moveTo(cx, cy);
@@ -418,7 +420,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       ctx.closePath();
       ctx.fill();
 
-      // --- AVG (Průměrný směr) ---
       ctx.strokeStyle = '#ff0000';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
@@ -426,7 +427,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       ctx.lineTo(cx + Math.cos(avgAngle) * avgLineLen, cy + Math.sin(avgAngle) * avgLineLen);
       ctx.stroke();
 
-      // --- MODE (Převládající směr) ---
       ctx.strokeStyle = '#0000ff';
       ctx.lineWidth = 4.0;
       ctx.beginPath();
@@ -434,7 +434,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
       ctx.lineTo(cx + Math.cos(modeAngle) * modeLineLen, cy + Math.sin(modeAngle) * modeLineLen);
       ctx.stroke();
 
-      // --- Interaktivní Sjednocený Tooltip ---
       if (chart.$windHover && chart.$mouse) {
         const { index, value } = chart.$windHover;
         const { x: mx, y: my } = chart.$mouse;
@@ -448,7 +447,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
 
-        // Sjednocené vnitřní odsazení a rozměry boxu (padding: 10px)
         const padX = 10;
         const padY = 10;
         const textWidth = ctx.measureText(tooltipText).width;
@@ -463,7 +461,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
           ty = my + 12;
         }
 
-        // Vizuální styl: Tmavé zaoblené moderní okno z LineChart grafů
         ctx.shadowColor = 'rgba(0,0,0,0.15)';
         ctx.shadowBlur = 6;
         ctx.shadowOffsetY = 2;
@@ -471,7 +468,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.lineWidth = 1;
 
-        // Kreslení zaobleného obdélníku s poloměrem 6px (shodně s cornerRadius)
         ctx.beginPath();
         if (typeof ctx.roundRect === 'function') {
           ctx.roundRect(tx, ty, boxWidth, boxHeight, 6);
@@ -481,7 +477,6 @@ function createWindRosePlugin(theme, points, sensorAttrs) {
         ctx.fill();
         ctx.stroke();
 
-        // Vykreslení čistě bílého textu
         ctx.shadowColor = 'transparent';
         ctx.fillStyle = '#ffffff';
         ctx.fillText(tooltipText, tx + padX, ty + boxHeight / 2);
@@ -609,7 +604,8 @@ class PocasiMeteoCard extends HTMLElement {
         this._rendering = false;
       });
     }, 50);
-  
+  }
+    
   _initialize() {
     const style = document.createElement('style');
     let css = '.pm-card { padding:0; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:0; }';
@@ -768,271 +764,163 @@ class PocasiMeteoCard extends HTMLElement {
     });
   }
 
-  async _updateCharts(hass, entity) {
-    const d = entity.attributes;
-    const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
-    const statsObj = d.sensor_stats || {};
+async _updateCharts(hass, entity) {
+  const d = entity.attributes;
+  const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
+  const statsObj = d.sensor_stats || {};
 
-    const primaryGraphs = this.shadowRoot.getElementById('primary-graphs');
-    const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
+  const primaryGraphs = this.shadowRoot.getElementById('primary-graphs');
+  const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
 
-    primaryGraphs.innerHTML = '';
-    secondaryGraphs.innerHTML = '';
+  primaryGraphs.innerHTML = '';
+  secondaryGraphs.innerHTML = '';
 
-    const graphsPerRow = Math.max(1, Number(this.config.graphs_per_row) || 2);
-    primaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
-    secondaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
-    
-    if (this.config.show_graphs === false || sensorsMeta.length === 0) return;
-
-    const statsIntervalHours = typeof d.statistics_interval === 'number' ? d.statistics_interval : 24;
-    const since = new Date(Date.now() - statsIntervalHours * 3600 * 1000).toISOString();
-    const canvases = {};
-    const history = {};
-
-    const targetSections = [
-      { type: 'primary', container: primaryGraphs },
-      { type: 'secondary', container: secondaryGraphs }
-    ];
-
-    targetSections.forEach(section => {
-      const filteredMeta = sensorsMeta.filter(s =>
-        s.type === section.type &&
-        s.visible !== false &&
-        !this.config.hide_sensors.includes(s.id)
-      );
-      
-      filteredMeta.forEach(s => {
-        const sState = hass.states[s.entity_id];
-        if (!sState) return;
-
-        const tile = document.createElement('div');
-        tile.classList.add('pm-graph-tile');
+  const graphsPerRow = Math.max(1, Number(this.config.graphs_per_row) || 2);
+  primaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
+  secondaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
   
-        const unit = sState.attributes.unit_of_measurement || '';
-        const rawFriendlyName = sState.attributes.friendly_name || s.id;
-        
-        // ARCHITEKTURA FRONTENDU: Bezpečně získáme čistý kód stanice z hlavní weather entity
-        const stationTitle = entity.attributes.friendly_name || '';
-        let cleanGraphName = rawFriendlyName;
-        
-        if (stationTitle && rawFriendlyName.indexOf(stationTitle) === 0) {
-          // Odřízneme kód stanice z úvodu názvu senzoru (např. "GAR632 Teplota venkovní" -> "Teplota venkovní")
-          cleanGraphName = rawFriendlyName.substring(stationTitle.length).trim();
-        }
+  if (this.config.show_graphs === false || sensorsMeta.length === 0) return;
 
-        // První písmeno očištěného názvu pro jistotu převedeme na velké
-        if (cleanGraphName.length > 0) {
-          cleanGraphName = cleanGraphName.charAt(0).toUpperCase() + cleanGraphName.slice(1);
-        }
+  const statsIntervalHours = typeof d.statistics_interval === 'number' ? d.statistics_interval : 24;
+  const since = new Date(Date.now() - statsIntervalHours * 3600 * 1000).toISOString();
 
-        const titleElement = document.createElement('div');
-        titleElement.classList.add('pm-graph-title');
-        titleElement.style.fontSize = '15px';
-        titleElement.style.fontWeight = '500';
-        titleElement.style.letterSpacing = '0.3px';
-        titleElement.textContent = cleanGraphName + (unit ? ' (' + unit + ')' : '');
+  const canvases = {};
+  const items = {};
+  const history = {};
 
-        const canvas = document.createElement('canvas');
-        canvas.classList.add('pm-graph');
+  const host = this.shadowRoot.host || this;
+  const theme = computeTheme(host);
 
-        const legend = document.createElement('div');
-        legend.classList.add('pm-legend');
+  const targetSections = [
+    { type: 'primary', container: primaryGraphs },
+    { type: 'secondary', container: secondaryGraphs }
+  ];
 
-        const chartWrapper = document.createElement('div');
-        chartWrapper.style.position = 'relative';
-        chartWrapper.style.width = '100%';
-        
-        if (s.id === 'vitr_smer') {
-          // Větrné růžici nastavíme čtvercový rozměr a vycentrujeme ji v dlaždici
-          chartWrapper.style.height = '260px';
-          chartWrapper.style.display = 'flex';
-          chartWrapper.style.justifyContent = 'center';
-          chartWrapper.style.alignItems = 'center';
-        } else {
-          chartWrapper.style.height = '180px';
-        }
-
-        chartWrapper.appendChild(canvas);
-
-        tile.appendChild(titleElement);
-        tile.appendChild(chartWrapper); 
-        tile.appendChild(legend);
-
-        section.container.appendChild(tile);
-
-        // Do registru canvases bleskově O(1) rychlostí napárujeme konfiguraci i dynamické výpočty z DB
-        const currentStats = statsObj[s.id] || {};
-        canvases[s.entity_id] = { 
-          canvas, 
-          tile, 
-          prettyName: cleanGraphName, 
-          legend, 
-          id: s.id,
-          graph_color: s.graph_color,
-          graph_style: s.graph_style,
-          stats_min: currentStats.stats_min,
-          stats_max: currentStats.stats_max,
-          stats_avg: currentStats.stats_avg,
-          stats_mode: currentStats.stats_mode,
-          stats_var: currentStats.stats_var
-        };
-      });
-    });
-
-    // 2. KROK: JEDINÝ HROMADNÝ WEBSOCKET DOTAZ
-    const activeEntityIds = Object.keys(canvases);
-
-    if (activeEntityIds.length > 0) {
-      try {
-        const resp = await hass.callWS({
-          type: "history/history_during_period",
-          start_time: since,
-          end_time: new Date().toISOString(),
-          entity_ids: activeEntityIds,
-          minimal_response: false,
-          significant_changes_only: false,
-          no_attributes: true
-        });
-
-        activeEntityIds.forEach(entityId => {
-          if (resp && resp[entityId]) {
-            history[entityId] = resp[entityId];
-          } else {
-            history[entityId] = [];
-          }
-        });
-      } catch (e) {
-        console.error("Hromadný WebSocket history dotaz selhal:", e);
-        activeEntityIds.forEach(entityId => {
-          history[entityId] = [];
-        });
-      }
-    }
-
-    const theme = computeTheme(this.shadowRoot.host);
-
-    // 3. KROK: CYKLICKÉ VYVÁŽENÉ VYKRESLENÍ GRAFŮ V RAM PLÁTNA
-    activeEntityIds.forEach(entityId => {
-      const item = canvases[entityId];
-      if (!item) return;
-
-      const sState = hass.states[entityId];
+  // --- 1) Vytvoření dlaždic, canvasů a item objektů ---
+  targetSections.forEach(section => {
+    const filteredMeta = sensorsMeta.filter(s =>
+      s.type === section.type &&
+      s.visible !== false &&
+      !this.config.hide_sensors.includes(s.id)
+    );
+    
+    filteredMeta.forEach(s => {
+      const sState = hass.states[s.entity_id];
       if (!sState) return;
 
-      const points = historyToPoints(history[entityId]);
-
-      if (points.length === 0) {
-        const val = Number(sState.state);
-        if (!isNaN(val)) {
-          const now = Date.now();
-          points.push({ x: now - 60000, y: val }, { x: now, y: val });
-        }
-      } else if (points.length === 1) {
-        points.push({ x: Date.now(), y: points[0].y });
-      }
+      const tile = document.createElement('div');
+      tile.classList.add('pm-graph-tile');
+  
+      const unit = sState.attributes.unit_of_measurement || '';
+      const rawFriendlyName = sState.attributes.friendly_name || s.id;
       
-      if (points.length > 1) {
-        const { canvas, tile, prettyName, legend, id } = item;
-
-        // Bezpečné zničení předchozí běžící instance Chart.js
-        if (this._charts[entityId]) {
-          try {
-            this._charts[entityId].destroy();
-            this._charts[entityId] = null;
-          } catch (e) {
-            console.warn("Chyba při destrukci grafu:", e);
-          }
-        }
-        
-        tile.style.backgroundColor = theme.bgColor;
-        
-        const activeCanvas = canvas;
-        if (activeCanvas) {
-          activeCanvas.style.backgroundColor = theme.bgColor;
-        }
-
-        if (id === 'vitr_smer') {
-          this._charts[entityId] = new Chart(activeCanvas.getContext('2d'), {
-            type: 'polarArea',
-            data: {
-              labels: WIND_DIR_LABELS,
-              datasets: [{
-                data: points.length > 0 ? buildWindRose(points) : new Array(16).fill(0),
-                backgroundColor: 'transparent',
-                borderColor: 'transparent',
-                borderWidth: 1
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } },
-              plugins: { 
-                legend: { display: false }, 
-                tooltip: { enabled: false } 
-              },
-              scales: { r: { display: false } }
-            },
-            plugins: [ createWindRosePlugin(theme, points, item) ] // Posíláme aktualizovaný item
-          });
-
-          legend.textContent = '';
-
-          const avgVal = typeof item.stats_avg === 'number' ? item.stats_avg : 0;
-          const modeVal = typeof item.stats_mode === 'number' ? item.stats_mode : 0;
-          const varVal = typeof item.stats_var === 'number' ? item.stats_var : 0;
-
-          const labelsData = [
-            { color: '#ff0000', text: 'Průměr: ' + avgVal.toFixed(0) + '° (' + degToDirection(avgVal) + ')' },
-            { color: '#0000ff', text: 'Mod: ' + modeVal.toFixed(0) + '° (' + degToDirection(modeVal) + ')' },
-            { color: '#ffa500', text: 'Rozptyl: ±' + varVal.toFixed(0) + '°' }
-          ];
-
-          labelsData.forEach(lbl => {
-            const itemDiv = document.createElement('div');
-            itemDiv.classList.add('pm-legend-item');
-            const colorSpan = document.createElement('span');
-            colorSpan.classList.add('pm-legend-color');
-            colorSpan.style.background = lbl.color;
-            const textSpan = document.createElement('span');
-            textSpan.textContent = lbl.text;
-            itemDiv.appendChild(colorSpan);
-            itemDiv.appendChild(textSpan);
-            legend.appendChild(itemDiv);
-          });
-        } else {
-          // Pro standardní čárové grafy načteme minima/maxima z centralizovaného registru item
-          const minVal = typeof item.stats_min === 'number' ? item.stats_min : 0;
-          const maxVal = typeof item.stats_max === 'number' ? item.stats_max : 0;
-          
-          this._charts[entityId] = new Chart(
-            activeCanvas.getContext('2d'),
-            createLineChartConfig(points, prettyName, theme, item, statsIntervalHours)
-          );
-          
-          legend.textContent = '';
-          const lineLabels = [
-            { color: 'red', text: 'Min: ' + minVal.toFixed(1) },
-            { color: 'green', text: 'Max: ' + maxVal.toFixed(1) }
-          ];
-
-          lineLabels.forEach(lbl => {
-            const itemDiv = document.createElement('div');
-            itemDiv.classList.add('pm-legend-item');
-            const colorSpan = document.createElement('span');
-            colorSpan.classList.add('pm-legend-color');
-            colorSpan.style.background = lbl.color;
-            const textSpan = document.createElement('span');
-            textSpan.textContent = lbl.text;
-            itemDiv.appendChild(colorSpan);
-            itemDiv.appendChild(textSpan);
-            legend.appendChild(itemDiv);
-          });
-        }
+      const stationTitle = entity.attributes.friendly_name || '';
+      let cleanGraphName = rawFriendlyName;
+      
+      if (stationTitle && rawFriendlyName.indexOf(stationTitle) === 0) {
+        cleanGraphName = rawFriendlyName.substring(stationTitle.length).trim();
       }
+
+      if (cleanGraphName.length > 0) {
+        cleanGraphName = cleanGraphName.charAt(0).toUpperCase() + cleanGraphName.slice(1);
+      }
+
+      const titleElement = document.createElement('div');
+      titleElement.classList.add('pm-graph-title');
+      titleElement.style.fontSize = '15px';
+      titleElement.style.fontWeight = '500';
+      titleElement.style.letterSpacing = '0.3px';
+      titleElement.textContent = cleanGraphName + (unit ? ' (' + unit + ')' : '');
+
+      const canvas = document.createElement('canvas');
+      canvas.classList.add('pm-graph');
+
+      const legend = document.createElement('div');
+      legend.classList.add('pm-legend');
+
+      tile.appendChild(titleElement);
+      tile.appendChild(canvas);
+      tile.appendChild(legend);
+
+      section.container.appendChild(tile);
+
+      canvases[s.id] = canvas;
+
+      const stats = statsObj[s.id] || {};
+
+      // --- item objekt pro tento graf ---
+      items[s.id] = {
+        entity_id: s.entity_id,
+        type: s.type,
+        title: cleanGraphName + (unit ? ' (' + unit + ')' : ''),
+        color: s.graph_color || '#3b82f6',
+        style: s.graph_style || 'smooth',
+        timestamp: d.timestamp || Date.now(),
+        min: stats.stats_min ?? null,
+        max: stats.stats_max ?? null,
+        avg: stats.stats_avg ?? null,
+        mod: stats.stats_mode ?? null,
+        var: stats.stats_var ?? null,
+        theme: theme
+      };
     });
+  });
+
+  // --- 2) Načtení historie z Recorderu pro všechny entity najednou ---
+  const entityIds = Object.values(items).map(it => it.entity_id);
+
+  if (entityIds.length > 0) {
+    try {
+      const rawHistory = await hass.callWS({
+        type: 'history/history_during_period',
+        start_time: since,
+        end_time: new Date().toISOString(),
+        entity_ids: entityIds,
+        minimal_response: true,
+      });
+
+      entityIds.forEach((eid, idx) => {
+        history[eid] = rawHistory[idx] || [];
+      });
+    } catch (e) {
+      // Pokud historie selže, grafy se vykreslí jen s osami
+    }
   }
+
+  // --- 3) Vykreslení grafů pomocí item + points + statsIntervalHours ---
+  Object.keys(items).forEach(id => {
+    const item = items[id];
+    const canvas = canvases[id];
+    if (!canvas) return;
+
+    const rawHist = history[item.entity_id] || [];
+    const points = historyToPoints(rawHist); // bez sortování, jak chceš
+
+    // Rozhodnutí, zda jde o windrose nebo line chart – logika zůstává stejná,
+    // jen se mění signatura volání.
+    const isWindDirection =
+      item.type === 'primary' &&
+      item.title.toLowerCase().includes('vítr směr');
+
+    if (isWindDirection) {
+      const cfg = {
+        type: 'polarArea',
+        data: { datasets: [{ data: buildWindRose(points) }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          }
+        },
+        plugins: [createWindRosePlugin(item, points, statsIntervalHours)]
+      };
+      new Chart(canvas.getContext('2d'), cfg);
+    } else {
+      const cfg = createLineChartConfig(item, points, statsIntervalHours);
+      new Chart(canvas.getContext('2d'), cfg);
+    }
+  });
 }
 
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
