@@ -556,7 +556,7 @@ class PocasiMeteoCard extends HTMLElement {
   set hass(hass) {
     this._currentHass = hass;
     const entity = hass.states[this.config.entity];
-
+alert('set hass called, entity: ' + (this.config && this.config.entity ? this.config.entity : 'no-config-entity')); //##
     if (!this._initialized) {
       this._initialize();
       this._initialized = true;
@@ -614,6 +614,7 @@ class PocasiMeteoCard extends HTMLElement {
 
   _initialize() {
     const style = document.createElement('style');
+alert('_initialize done, shadowRoot exists: ' + !!this.shadowRoot); //##
     let css = '.pm-card { padding:0; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:0; }';
     css +='.pm-header-section { padding:20px; background:linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%); border-bottom:1px solid rgba(255,255,255,0.12); display:flex; flex-direction:column; gap:14px; }';
     css +='.pm-header-bottom { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:20px; }';
@@ -771,8 +772,11 @@ class PocasiMeteoCard extends HTMLElement {
     const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
     const statsObj = d.sensor_stats || {};
 
+alert('_updateCharts start'); //##
     const primaryGraphs = this.shadowRoot.getElementById('primary-graphs');
+alert('primaryGraphs: ' + (primaryGraphs ? 'ok' : 'MISSING')); //##
     const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
+alert('secondaryGraphs: ' + (primaryGraphs ? 'ok' : 'MISSING')); //##
 
     primaryGraphs.innerHTML = '';
     secondaryGraphs.innerHTML = '';
@@ -803,6 +807,7 @@ class PocasiMeteoCard extends HTMLElement {
       });
       
       filteredMeta.forEach(s => {
+alert('processing sensor: ' + (s.id || 'no-id') + ' entity_id: ' + (s.entity_id || 'no-entity_id')); //##
         const sState = hass.states[s.entity_id];
         if (!sState) return;
 
@@ -967,6 +972,7 @@ class PocasiMeteoCard extends HTMLElement {
       }
 
       if (id === 'vitr_smer') {
+alert('creating Chart for ' + cleanGraphName); //##
         this._charts[entityId] = new Chart(canvas.getContext('2d'), {
           type: 'polarArea',
           data: {
@@ -1020,7 +1026,8 @@ class PocasiMeteoCard extends HTMLElement {
       else {
         const minVal = typeof item.stats_min === 'number' ? item.stats_min : 0;
         const maxVal = typeof item.stats_max === 'number' ? item.stats_max : 0;
-        
+
+alert('creating Chart for ' + cleanGraphName); //##
         this._charts[entityId] = new Chart(
           canvas.getContext('2d'),
           createLineChartConfig(points, prettyName, theme, item, statsIntervalHours)
