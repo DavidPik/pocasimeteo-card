@@ -582,7 +582,7 @@ class PocasiMeteoCard extends HTMLElement {
     // ARCHITEKTURA FRONTENDU: Reaktivní pojistka. Grafy překreslíme vždy, pokud se v systému 
     // změnila data historie, délka fronty, nebo dorazily čerstvé statistiky sensor_stats z weather entity.
     const nowTs = Date.now();
-    const currentApiTimestamp = entity.attributes.api_timestamp || '';
+    const currentApiTimestamp = entity.attributes.timestamp || '';
     const currentQueue = entity.attributes.history_queue_length || 0;
     const currentStatsStr = JSON.stringify(entity.attributes.sensor_stats || {});
 
@@ -725,7 +725,7 @@ class PocasiMeteoCard extends HTMLElement {
 
     // ARCHITEKTURA FRONTENDU: Spojíme lokalitu a kód stanice do záhlaví (např. "Hostivice — Slunečno")
     headerTitle.textContent = `${lokalita}${staniceKod} — ${stateText}`;
-    headerTimestamp.textContent = d.api_timestamp ? new Date(d.api_timestamp).toLocaleTimeString() : '';
+    headerTimestamp.textContent = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
     
     const temp = d.temperature !== undefined ? d.temperature : '--';
     headerMain.textContent = `${temp} °C`;
@@ -793,7 +793,7 @@ class PocasiMeteoCard extends HTMLElement {
       { type: 'secondary', container: secondaryGraphs }
     ];
 
-    // --- KROK 1: PŘÍPRAVA CANVASŮ A REGISTRACE ENTIT ---
+    // --- KROK 1: PŘÍPRAVA CANVASŮ A REGISTRACE ENTIT PODLE ATRIBUTU SENSORS ---
     targetSections.forEach(section => {
       const filteredMeta = sensorsMeta.filter(s =>
         s.type === section.type &&
@@ -806,7 +806,7 @@ class PocasiMeteoCard extends HTMLElement {
         if (!sState) return;
 
         const tile = document.createElement('div');
-        tile.classList.add('pm-graph-tile');
+        tile.className = 'pm-graph-tile';
   
         const unit = sState.attributes.unit_of_measurement || '';
         const rawFriendlyName = sState.attributes.friendly_name || s.id;
@@ -826,17 +826,17 @@ class PocasiMeteoCard extends HTMLElement {
         }
 
         const titleElement = document.createElement('div');
-        titleElement.classList.add('pm-graph-title');
+        titleElement.className = 'pm-graph-title';
         titleElement.style.fontSize = '15px';
         titleElement.style.fontWeight = '500';
         titleElement.style.letterSpacing = '0.3px';
         titleElement.textContent = cleanGraphName + (unit ? ' (' + unit + ')' : '');
 
         const canvas = document.createElement('canvas');
-        canvas.classList.add('pm-graph');
+        canvas.className = 'pm-graph';
 
         const legend = document.createElement('div');
-        legend.classList.add('pm-legend');
+        legend.className = 'pm-legend';
 
         const chartWrapper = document.createElement('div');
         chartWrapper.style.position = 'relative';
@@ -859,8 +859,20 @@ class PocasiMeteoCard extends HTMLElement {
 
         section.container.appendChild(tile);
 
-        // Dočasný registr prvků DOM pro finální vykreslení
-        activeCanvases[s.entity_id] = { canvas, tile, legend, meta: s, cleanName: cleanGraphName };
+        // Napárování konfigurace a dynamických výpočtů
+        const currentStats = statsObj[s.id] || {};
+        activeCanvases[s.entity_id] = { 
+          canvas, 
+          tile, 
+          legend, 
+          meta: s,
+          cleanName: cleanGraphName,
+          stats_min: currentStats.stats_min,
+          stats_max: currentStats.stats_max,
+          stats_avg: currentStats.stats_avg,
+          stats_mode: currentStats.stats_mode,
+          stats_var: currentStats.stats_var
+        };
       });
     });
 
@@ -902,20 +914,28 @@ class PocasiMeteoCard extends HTMLElement {
 
       const points = historyToPoints(rawHistoryData[entityId]);
 
-      // Fallback pro statické stavy bez dostatečné historie
+      // Fallback pro stavy (např. unavailable), pokud Recorder zatím nemá body, dosadíme aktuální stav z weather entity
       if (points.length === 0) {
-        const val = Number(sState.state);
-        if (!isNaN(val)) {
+        let fallbackVal = Number(sState.state);
+        
+        // Speciální fallback: pokud je samostatný senzor unavailable, zkusíme vytáhnout hodnotu přímo z atributů weather entity
+        if (isNaN(fallbackVal)) {
+          if (domItem.meta.id === 'teplota_vnejsi') fallbackVal = Number(d.temperature);
+          else if (domItem.meta.id === 'vlhkost_vnejsi') fallbackVal = Number(d.humidity);
+          else if (domItem.meta.id === 'tlak_relativni') fallbackVal = Number(d.pressure);
+          else if (domItem.meta.id === 'vitr_rychlost') fallbackVal = Number(d.wind_speed);
+          else if (domItem.meta.id === 'vitr_smer') fallbackVal = Number(d.wind_bearing);
+        }
+
+        if (!isNaN(fallbackVal)) {
           const now = Date.now();
-          points.push({ x: now - 60000, y: val }, { x: now, y: val });
+          points.push({ x: now - 60000, y: fallbackVal }, { x: now, y: fallbackVal });
         }
       } else if (points.length === 1) {
         points.push({ x: Date.now(), y: points[0].y });
       }
 
       if (points.length > 1) {
-        const currentStats = statsObj[domItem.meta.id] || {};
-        
         preparedGraphsData.push({
           entityId: entityId,
           canvas: domItem.canvas,
@@ -926,11 +946,11 @@ class PocasiMeteoCard extends HTMLElement {
           points: points,
           graph_color: domItem.meta.graph_color,
           graph_style: domItem.meta.graph_style,
-          stats_min: currentStats.stats_min,
-          stats_max: currentStats.stats_max,
-          stats_avg: currentStats.stats_avg,
-          stats_mode: currentStats.stats_mode,
-          stats_var: currentStats.stats_var
+          stats_min: domItem.stats_min,
+          stats_max: domItem.stats_max,
+          stats_avg: domItem.stats_avg,
+          stats_mode: domItem.stats_mode,
+          stats_var: domItem.stats_var
         });
       }
     });
@@ -939,7 +959,6 @@ class PocasiMeteoCard extends HTMLElement {
     preparedGraphsData.forEach(item => {
       const { entityId, canvas, tile, prettyName, legend, id, points } = item;
 
-      // Bezpečné zničení předchozí běžící instance Chart.js
       if (this._charts[entityId]) {
         try {
           this._charts[entityId].destroy();
