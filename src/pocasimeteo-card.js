@@ -556,7 +556,7 @@ class PocasiMeteoCard extends HTMLElement {
   set hass(hass) {
     this._currentHass = hass;
     const entity = hass.states[this.config.entity];
-alert('set hass called, entity: ' + (this.config && this.config.entity ? this.config.entity : 'no-config-entity')); //##
+//## alert('set hass called, entity: ' + (this.config && this.config.entity ? this.config.entity : 'no-config-entity'));
     if (!this._initialized) {
       this._initialize();
       this._initialized = true;
@@ -586,16 +586,21 @@ alert('set hass called, entity: ' + (this.config && this.config.entity ? this.co
     const currentQueue = entity.attributes.history_queue_length || 0;
     const currentStatsStr = JSON.stringify(entity.attributes.sensor_stats || {});
 
-    // Pevná časová pojistka pro ochranu před zacyklením CPU (maximálně 1 průchod za 10 vteřin při běžném kmitání myši)
+    // ARCHITEKTURA FRONTENDU: Zjistíme, zda se od minula reálně změnila data
+    const dataChanged = 
+      this._lastApiTimestamp !== currentApiTimestamp ||
+      this._lastQueueLength !== currentQueue ||
+      this._lastStatsStr !== currentStatsStr;
+
     const timeDifference = nowTs - this._lastFetch;
 
-    if (this._lastApiTimestamp === currentApiTimestamp && 
-        this._lastQueueLength === currentQueue && 
-        this._lastStatsStr === currentStatsStr && 
-        timeDifference < 10000) {
+alert('_updateVisualHeader called, timestamp: ' + currentApiTimestamp);
+    // Pokud se data NEZMĚNILA a zároveň od posledního vykreslení uplynulo méně než 10 vteřin,
+    // teprve tehdy bezpečně ukončíme průchod (ochrana CPU před kmitáním myši).
+    if (!dataChanged && timeDifference < 10000) {
       return;
     }
-
+    
     if (this._rendering) return;
     this._rendering = true;
 
@@ -614,7 +619,7 @@ alert('set hass called, entity: ' + (this.config && this.config.entity ? this.co
 
   _initialize() {
     const style = document.createElement('style');
-alert('_initialize done, shadowRoot exists: ' + !!this.shadowRoot); //##
+//## alert('_initialize done, shadowRoot exists: ' + !!this.shadowRoot);
     let css = '.pm-card { padding:0; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:0; }';
     css +='.pm-header-section { padding:20px; background:linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%); border-bottom:1px solid rgba(255,255,255,0.12); display:flex; flex-direction:column; gap:14px; }';
     css +='.pm-header-bottom { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:20px; }';
