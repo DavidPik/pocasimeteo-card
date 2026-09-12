@@ -766,7 +766,6 @@ class PocasiMeteoCard extends HTMLElement {
     });
   }
 
-=======================================
   async _updateCharts(hass, entity) {
     const d = entity.attributes;
     const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
