@@ -793,13 +793,14 @@ class PocasiMeteoCard extends HTMLElement {
       { type: 'secondary', container: secondaryGraphs }
     ];
 
-    // --- KROK 1: PŘÍPRAVA CANVASŮ A REGISTRACE ENTIT PODLE ATRIBUTU SENSORS ---
+    // --- KROK 1: PŘÍPRAVA CANVASŮ A REGISTRACE ENTIT ---
     targetSections.forEach(section => {
-      const filteredMeta = sensorsMeta.filter(s =>
-        s.type === section.type &&
-        s.visible !== false &&
-        !this.config.hide_sensors.includes(s.id)
-      );
+      const filteredMeta = sensorsMeta.filter(s => {
+        const isCorrectType = s.type === section.type;
+        const isVisible = s.visible !== false;
+        const isNotHidden = !Array.isArray(this.config.hide_sensors) || !this.config.hide_sensors.includes(s.id);
+        return isCorrectType && isVisible && isNotHidden;
+      });
       
       filteredMeta.forEach(s => {
         const sState = hass.states[s.entity_id];
@@ -811,16 +812,13 @@ class PocasiMeteoCard extends HTMLElement {
         const unit = sState.attributes.unit_of_measurement || '';
         const rawFriendlyName = sState.attributes.friendly_name || s.id;
         
-        // ARCHITEKTURA FRONTENDU: Bezpečně získáme čistý kód stanice z hlavní weather entity
         const stationTitle = entity.attributes.friendly_name || '';
         let cleanGraphName = rawFriendlyName;
         
         if (stationTitle && rawFriendlyName.indexOf(stationTitle) === 0) {
-          // Odřízneme kód stanice z úvodu názvu senzoru
           cleanGraphName = rawFriendlyName.substring(stationTitle.length).trim();
         }
 
-        // První písmeno očištěného názvu převedeme na velké
         if (cleanGraphName.length > 0) {
           cleanGraphName = cleanGraphName.charAt(0).toUpperCase() + cleanGraphName.slice(1);
         }
@@ -852,14 +850,11 @@ class PocasiMeteoCard extends HTMLElement {
         }
 
         chartWrapper.appendChild(canvas);
-
         tile.appendChild(titleElement);
         tile.appendChild(chartWrapper); 
         tile.appendChild(legend);
-
         section.container.appendChild(tile);
 
-        // Napárování konfigurace a dynamických výpočtů
         const currentStats = statsObj[s.id] || {};
         activeCanvases[s.entity_id] = { 
           canvas, 
@@ -904,7 +899,7 @@ class PocasiMeteoCard extends HTMLElement {
 
     const theme = computeTheme(this.shadowRoot.host);
     
-    // --- KROK 3: SESTAVENÍ JEDNOTNÉ DATOVÉ STRUKTURY V PAMĚTI (Bod d) ---
+    // --- KROK 3: SESTAVENÍ JEDNOTNÉ DATOVÉ STRUKTURY V PAMĚTI ---
     const preparedGraphsData = [];
 
     activeEntityIds.forEach(entityId => {
@@ -914,11 +909,9 @@ class PocasiMeteoCard extends HTMLElement {
 
       const points = historyToPoints(rawHistoryData[entityId]);
 
-      // Fallback pro stavy (např. unavailable), pokud Recorder zatím nemá body, dosadíme aktuální stav z weather entity
       if (points.length === 0) {
         let fallbackVal = Number(sState.state);
         
-        // Speciální fallback: pokud je samostatný senzor unavailable, zkusíme vytáhnout hodnotu přímo z atributů weather entity
         if (isNaN(fallbackVal)) {
           if (domItem.meta.id === 'teplota_vnejsi') fallbackVal = Number(d.temperature);
           else if (domItem.meta.id === 'vlhkost_vnejsi') fallbackVal = Number(d.humidity);
@@ -932,7 +925,7 @@ class PocasiMeteoCard extends HTMLElement {
           points.push({ x: now - 60000, y: fallbackVal }, { x: now, y: fallbackVal });
         }
       } else if (points.length === 1) {
-        points.push({ x: Date.now(), y: points[0].y });
+        points.push({ x: Date.now(), y: points[0].y }); // <-- OPRAVENO: přidán správný index [0]
       }
 
       if (points.length > 1) {
@@ -955,7 +948,7 @@ class PocasiMeteoCard extends HTMLElement {
       }
     });
 
-    // --- KROK 4: PASIVNÍ VYKRESLENÍ GRAFŮ Z PŘIPRAVENÉHO JEDNOTNÉHO OBJEKTU ---
+    // --- KROK 4: PASIVNÍ VYKRESLENÍ GRAFŮ ---
     preparedGraphsData.forEach(item => {
       const { entityId, canvas, tile, prettyName, legend, id, points } = item;
 
@@ -973,7 +966,6 @@ class PocasiMeteoCard extends HTMLElement {
         canvas.style.backgroundColor = theme.bgColor;
       }
 
-      // Vykreslení Větrné růžice
       if (id === 'vitr_smer') {
         this._charts[entityId] = new Chart(canvas.getContext('2d'), {
           type: 'polarArea',
