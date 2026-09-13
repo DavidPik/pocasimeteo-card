@@ -786,6 +786,9 @@ class PocasiMeteoCard extends HTMLElement {
     const primaryGraphs = this.shadowRoot.getElementById('primary-graphs');
     const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
 
+    // Bezpečné ověření existence kontejnerů před manipulací
+    if (!primaryGraphs || !secondaryGraphs) return;
+
     primaryGraphs.innerHTML = '';
     secondaryGraphs.innerHTML = '';
 
@@ -793,7 +796,11 @@ class PocasiMeteoCard extends HTMLElement {
     primaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
     secondaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
     
-    if (this.config.show_graphs === false || sensorsMeta.length === 0) return;
+    if (this.config.show_graphs === false) return;
+    
+    // Pokud pole senzorů ještě nedorazilo z API, neprovádíme tvrdý return celého skriptu,
+    // ale pouze tiše přeskočíme zbytek metody. Záhlaví zůstane funkční a vykreslené.
+    if (sensorsMeta.length === 0) return;
 
     const statsIntervalHours = typeof d.statistics_interval === 'number' ? d.statistics_interval : 24;
     const since = new Date(Date.now() - statsIntervalHours * 3600 * 1000).toISOString();
@@ -937,7 +944,7 @@ class PocasiMeteoCard extends HTMLElement {
           points.push({ x: now - 60000, y: fallbackVal }, { x: now, y: fallbackVal });
         }
       } else if (points.length === 1) {
-        points.push({ x: Date.now(), y: points[0].y }); // <-- OPRAVENO: přidán správný index [0]
+        points.push({ x: Date.now(), y: points[0].y });
       }
 
       if (points.length > 1) {
@@ -960,7 +967,7 @@ class PocasiMeteoCard extends HTMLElement {
       }
     });
 
-    // --- KROK 4: PASIVNÍ VYKRESLENÍ GRAFŮ ---
+    // --- KROK 4: PASIVNÍ VYKRESLENÍ GRAFŮ Z PŘIPRAVENÉHO JEDNOTNÉHO OBJEKTU ---
     preparedGraphsData.forEach(item => {
       const { entityId, canvas, tile, prettyName, legend, id, points } = item;
 
