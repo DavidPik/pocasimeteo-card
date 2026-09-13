@@ -556,7 +556,6 @@ class PocasiMeteoCard extends HTMLElement {
   set hass(hass) {
     this._currentHass = hass;
     const entity = hass.states[this.config.entity];
-//## alert('set hass called, entity: ' + (this.config && this.config.entity ? this.config.entity : 'no-config-entity'));
     if (!this._initialized) {
       this._initialize();
       this._initialized = true;
@@ -594,7 +593,6 @@ class PocasiMeteoCard extends HTMLElement {
 
     const timeDifference = nowTs - this._lastFetch;
 
-alert('_updateVisualHeader called, timestamp: ' + currentApiTimestamp);
     // Pokud se data NEZMĚNILA a zároveň od posledního vykreslení uplynulo méně než 10 vteřin,
     // teprve tehdy bezpečně ukončíme průchod (ochrana CPU před kmitáním myši).
     if (!dataChanged && timeDifference < 10000) {
@@ -619,7 +617,6 @@ alert('_updateVisualHeader called, timestamp: ' + currentApiTimestamp);
 
   _initialize() {
     const style = document.createElement('style');
-//## alert('_initialize done, shadowRoot exists: ' + !!this.shadowRoot);
     let css = '.pm-card { padding:0; color:var(--primary-text-color,#fff); display:flex; flex-direction:column; gap:0; }';
     css +='.pm-header-section { padding:20px; background:linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%); border-bottom:1px solid rgba(255,255,255,0.12); display:flex; flex-direction:column; gap:14px; }';
     css +='.pm-header-bottom { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:20px; }';
@@ -660,29 +657,36 @@ alert('_updateVisualHeader called, timestamp: ' + currentApiTimestamp);
 
     const topDiv = document.createElement('div');
     topDiv.classList.add('pm-header-top');
-    const titleDiv = document.createElement('div');
-    titleDiv.id = 'header-title';
-    titleDiv.classList.add('pm-header-title');
-    const timeDiv = document.createElement('div');
-    timeDiv.id = 'header-timestamp';
-    timeDiv.classList.add('pm-header-timestamp');
-    topDiv.appendChild(titleDiv);
-    topDiv.appendChild(timeDiv);
+    
+    // UKLÁDÁNÍ DO INSTANCE NAMÍSTO POUHÝCH KONSTANT:
+    this._headerTitle = document.createElement('div');
+    this._headerTitle.id = 'header-title';
+    this._headerTitle.classList.add('pm-header-title');
+    
+    this._headerTimestamp = document.createElement('div');
+    this._headerTimestamp.id = 'header-timestamp';
+    this._headerTimestamp.classList.add('pm-header-timestamp');
+    
+    topDiv.appendChild(this._headerTitle);
+    topDiv.appendChild(this._headerTimestamp);
 
     const bottomDiv = document.createElement('div');
     bottomDiv.classList.add('pm-header-bottom');
-    const mainDiv = document.createElement('div');
-    mainDiv.id = 'header-main';
-    mainDiv.classList.add('pm-header-main');
-    const detailsDiv = document.createElement('div');
-    detailsDiv.id = 'header-details';
-    detailsDiv.classList.add('pm-header-details');
-    bottomDiv.appendChild(mainDiv);
-    bottomDiv.appendChild(detailsDiv);
+    
+    this._headerMain = document.createElement('div');
+    this._headerMain.id = 'header-main';
+    this._headerMain.classList.add('pm-header-main');
+    
+    this._headerDetails = document.createElement('div');
+    this._headerDetails.id = 'header-details';
+    this._headerDetails.classList.add('pm-header-details');
+    
+    bottomDiv.appendChild(this._headerMain);
+    bottomDiv.appendChild(this._headerDetails);
 
     headerSec.appendChild(topDiv);
     headerSec.appendChild(bottomDiv);
-
+ 
     const primarySec = document.createElement('div');
     primarySec.classList.add('pm-primary-section');
     const primaryGraphs = document.createElement('div');
@@ -702,11 +706,13 @@ alert('_updateVisualHeader called, timestamp: ' + currentApiTimestamp);
   }
 
   _updateVisualHeader(entity) {
+    // BEZPEČNOSTNÍ POJISTKA: Pokud elementy ještě nejsou v paměti připravené, 
+    // tiše přeskočíme krok, dokud nás HA nezačne volat v dalším cyklu.
+    if (!this._headerTitle || !this._headerTimestamp || !this._headerMain || !this._headerDetails) {
+      return;
+    }
+
     const d = entity.attributes;
-    const headerTitle = this.shadowRoot.getElementById('header-title');
-    const headerTimestamp = this.shadowRoot.getElementById('header-timestamp');
-    const headerMain = this.shadowRoot.getElementById('header-main');
-    const headerDetails = this.shadowRoot.getElementById('header-details');
 
     const conditionTranslations = {
       'sunny': 'Slunečno',
@@ -729,12 +735,12 @@ alert('_updateVisualHeader called, timestamp: ' + currentApiTimestamp);
     const lokalita = d.lokalita_stanice || 'Meteostanice';
     const staniceKod = d.friendly_name ? ` ${d.friendly_name}` : '';
 
-    // ARCHITEKTURA FRONTENDU: Spojíme lokalitu a kód stanice do záhlaví (např. "Hostivice — Slunečno")
-    headerTitle.textContent = `${lokalita}${staniceKod} — ${stateText}`;
-    headerTimestamp.textContent = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
+    // ZÁPIS PŘÍMO DO INSTANČNÍCH PROMĚNNÝCH BEZ GETELEMENTBYID
+    this._headerTitle.textContent = `${lokalita}${staniceKod} — ${stateText}`;
+    this._headerTimestamp.textContent = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '';
     
     const temp = d.temperature !== undefined ? d.temperature : '--';
-    headerMain.textContent = `${temp} °C`;
+    this._headerMain.textContent = `${temp} °C`;
 
     const pressure = d.pressure !== undefined ? d.pressure : '--';
     const humidity = d.humidity !== undefined ? d.humidity : '--';
@@ -757,7 +763,7 @@ alert('_updateVisualHeader called, timestamp: ' + currentApiTimestamp);
     const kompletniVitrText = `${windSpeed} / ${windGust} m/s${windDirectionText}`;
     const srazkyDen = d.srazky_den !== undefined ? d.srazky_den : 0;
 
-    headerDetails.textContent = '';
+    this._headerDetails.textContent = '';
     const items = [
       `Tlak vzduchu: ${pressure} hPa`,
       `Vlhkost: ${humidity} %`,
@@ -768,7 +774,7 @@ alert('_updateVisualHeader called, timestamp: ' + currentApiTimestamp);
     items.forEach(text => {
       const div = document.createElement('div');
       div.textContent = text;
-      headerDetails.appendChild(div);
+      this._headerDetails.appendChild(div);
     });
   }
 
@@ -777,11 +783,8 @@ alert('_updateVisualHeader called, timestamp: ' + currentApiTimestamp);
     const sensorsMeta = Array.isArray(d.sensors) ? d.sensors : [];
     const statsObj = d.sensor_stats || {};
 
-alert('_updateCharts start'); //##
     const primaryGraphs = this.shadowRoot.getElementById('primary-graphs');
-alert('primaryGraphs: ' + (primaryGraphs ? 'ok' : 'MISSING')); //##
     const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
-alert('secondaryGraphs: ' + (primaryGraphs ? 'ok' : 'MISSING')); //##
 
     primaryGraphs.innerHTML = '';
     secondaryGraphs.innerHTML = '';
@@ -812,7 +815,6 @@ alert('secondaryGraphs: ' + (primaryGraphs ? 'ok' : 'MISSING')); //##
       });
       
       filteredMeta.forEach(s => {
-alert('processing sensor: ' + (s.id || 'no-id') + ' entity_id: ' + (s.entity_id || 'no-entity_id')); //##
         const sState = hass.states[s.entity_id];
         if (!sState) return;
 
@@ -977,7 +979,6 @@ alert('processing sensor: ' + (s.id || 'no-id') + ' entity_id: ' + (s.entity_id 
       }
 
       if (id === 'vitr_smer') {
-alert('creating Chart for ' + cleanGraphName); //##
         this._charts[entityId] = new Chart(canvas.getContext('2d'), {
           type: 'polarArea',
           data: {
@@ -1032,7 +1033,6 @@ alert('creating Chart for ' + cleanGraphName); //##
         const minVal = typeof item.stats_min === 'number' ? item.stats_min : 0;
         const maxVal = typeof item.stats_max === 'number' ? item.stats_max : 0;
 
-alert('creating Chart for ' + cleanGraphName); //##
         this._charts[entityId] = new Chart(
           canvas.getContext('2d'),
           createLineChartConfig(points, prettyName, theme, item, statsIntervalHours)
