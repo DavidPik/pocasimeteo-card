@@ -329,7 +329,87 @@ class PocasiMeteoCard extends HTMLElement {
         min-width: 260px;
         white-space: nowrap;
       }
+
+      .pm-primary-section {
+        background: rgba(255,255,255,0.03);
+        padding: 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+      }
+      .pm-secondary-section {
+        background: rgba(255,255,255,0.05);
+        padding: 16px;
+      }
+
+      .pm-graphs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-top: 8px;
+        align-items: stretch;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .pm-graph-tile {
+        box-sizing: border-box;
+        flex: 0 1 calc((100% - (var(--graphs-per-row) - 1) * 16px) / var(--graphs-per-row));
+        min-width: 200px;
+        background: var(--ha-card-background,#1c1c1c);
+        border-radius: 12px;
+        padding: 8px;
+        box-shadow: var(--ha-card-box-shadow,0 2px 4px rgba(0,0,0,0.2));
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .pm-graph-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        padding: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
+      }
+
+      .pm-graph {
+        width: 100%;
+        height: 180px;
+        display: block;
+      }
+
+      .pm-legend {
+        margin-top: 0px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        font-size: 14px;
+        opacity: 0.8;
+        padding: 4px;
+      }
+
+      .pm-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .pm-legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+      }
+
+      @media (max-width: 480px) {
+        .pm-graph-tile {
+          flex-grow: 1;
+        }
+      }
     `;
+
     style.textContent = css;
 
     const card = document.createElement('ha-card');
@@ -567,10 +647,12 @@ class PocasiMeteoCard extends HTMLElement {
           start_time: since,
           end_time: new Date().toISOString(),
           entity_id: [entityId],
-          minimal_response: true,
-          no_attributes: true
+          minimal_response: false,
+          no_attributes: false
         });
 
+        console.log('PM history', entityId, history); //## debug část
+        
         rawHistoryData[entry.meta.id] = history && history.length > 0 ? history[0] : [];
       } catch (err) {
         rawHistoryData[entry.meta.id] = [];
@@ -593,7 +675,13 @@ class PocasiMeteoCard extends HTMLElement {
       const points = pointsMap[meta.id] || [];
       const s = statsObj[meta.id] || {};
 
-      if (meta.graph_type === 'wind_rose') {
+      const gt = (meta.graph_type || '').toLowerCase();
+      const isWindRose =
+        gt === 'wind_rose' ||
+        gt === 'windrose' ||
+        meta.id === 'vitr_smer' || meta.id === 'wind_direction';
+
+      if (isWindRose) {
         this._renderWindRose(canvas, points, s, theme);
       } else {
         this._renderLineChart(canvas, points, cleanName, theme, s, statsIntervalHours);
