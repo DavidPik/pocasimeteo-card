@@ -797,7 +797,6 @@ class PocasiMeteoCard extends HTMLElement {
     secondaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
     
     if (this.config.show_graphs === false) return;
-    
     // Pokud pole senzorů ještě nedorazilo z API, neprovádíme tvrdý return celého skriptu,
     // ale pouze tiše přeskočíme zbytek metody. Záhlaví zůstane funkční a vykreslené.
     if (sensorsMeta.length === 0) return;
