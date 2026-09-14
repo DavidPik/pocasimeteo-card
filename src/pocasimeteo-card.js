@@ -622,17 +622,29 @@ class PocasiMeteoCard extends HTMLElement {
         const canvas = document.createElement('canvas');
         canvas.className = 'pm-graph';
         canvas.id = `pm-graph-${s.id}`;
-        // zajistit, že canvas má CSS rozměry i interní pixelové rozlišení
+        // zajistit, že canvas má CSS rozměry
         canvas.style.width = '100%';
         canvas.style.height = '100%';
-        // nastavit interní rozlišení podle devicePixelRatio pro ostré vykreslení
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor((chartWrapper.clientWidth || 300) * dpr);
-        canvas.height = Math.floor((chartWrapper.clientHeight || 180) * dpr);
-        tile.appendChild(titleElement);
-        tile.appendChild(canvas);
 
+        // vytvoříme wrapper pro canvas (chartWrapper) a nastavíme výšku
+        const chartWrapper = document.createElement('div');
+        chartWrapper.style.position = 'relative';
+        chartWrapper.style.width = '100%';
+        chartWrapper.style.height = s.id === 'vitr_smer' ? '260px' : '180px';
+
+        // vložíme canvas do wrapperu a wrapper do tile
+        chartWrapper.appendChild(canvas);
+        tile.appendChild(titleElement);
+        tile.appendChild(chartWrapper);
+
+        // chartWrapper a canvas už byly vloženy do tile výše
         section.container.appendChild(tile);
+
+        // nyní, když je chartWrapper v DOM, nastavíme interní pixelové rozlišení canvasu
+        const dpr = window.devicePixelRatio || 1;
+        // chartWrapper je dostupný zde, protože jsme ho přidali do tile a tile do section.container
+        canvas.width = Math.floor((chartWrapper.clientWidth || canvas.clientWidth || 300) * dpr);
+        canvas.height = Math.floor((chartWrapper.clientHeight || canvas.clientHeight || 180) * dpr);
 
         activeCanvases[s.id] = {
           canvas,
@@ -640,6 +652,7 @@ class PocasiMeteoCard extends HTMLElement {
           cleanName: cleanGraphName,
           unit
         };
+
       });
     });
 
@@ -687,6 +700,8 @@ class PocasiMeteoCard extends HTMLElement {
         gt === 'windrose' ||
         meta.id === 'vitr_smer' || meta.id === 'wind_direction';
 
+console.log('rendering', meta.id, 'points count', points.length, 'firstX', points[0]?.x, 'lastX', points[points.length-1]?.x); //##
+      
       if (isWindRose) {
         this._renderWindRose(canvas, points, s, theme);
       } else {
@@ -836,7 +851,13 @@ class PocasiMeteoCard extends HTMLElement {
       this._charts[canvas.id].destroy();
     }
 
-    this._charts[canvas.id] = new Chart(canvas.getContext('2d'), cfg);
+    const chart = new Chart(canvas.getContext('2d'), cfg);
+    this._charts[canvas.id] = chart;
+
+    // zajistit korektní velikost a vykreslení po vložení do DOM
+    requestAnimationFrame(() => {
+      try { chart.resize(); } catch (e) { console.warn('chart.resize failed', e); }
+    });
   }
 
   /**
