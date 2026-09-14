@@ -936,35 +936,29 @@ console.log('rendering', meta.id, 'points count', points.length, 'firstX', point
     const cfg = this._createLineChartConfig(points, cleanName, theme, s, statsIntervalHours);
 
     if (this._charts[canvas.id]) {
-      this._charts[canvas.id].destroy();
+      try { this._charts[canvas.id].destroy(); } catch(e){ console.warn('destroy chart failed', e); }
+      delete this._charts[canvas.id];
     }
 
     const chart = new Chart(canvas.getContext('2d'), cfg);
     this._charts[canvas.id] = chart;
 
-     // zajistit korektní velikost a vykreslení po vložení do DOM
-    requestAnimationFrame(() => {
-      try { chart.resize(); } catch (e) { console.warn('chart.resize failed', e); }
-    });
+    requestAnimationFrame(() => { try { chart.resize(); } catch(e){} });
 
-    // vytvořit legendu a vložit do placeholderu
+    // doplnit legendu statistik: pro lineární grafy chceme Min/Avg/Max
     if (legendPlaceholder) {
       legendPlaceholder.innerHTML = '';
       const color = s.graph_color || '#3b82f6';
-      const legendEl = this._createStatsLegend(s, color, false);
+      // showDash: true => chybějící hodnoty zobrazíme jako '-'
+      const legendEl = this._createStatsLegend(s, color, false, { showDash: true });
       legendPlaceholder.appendChild(legendEl);
     }
-  
-    // zajistit korektní velikost a vykreslení po vložení do DOM
-    requestAnimationFrame(() => {
-      try { chart.resize(); } catch (e) { console.warn('chart.resize failed', e); }
-    });
   }
-
+  
   /**
    * Plugin pro větrnou růžici — zachována původní logika.
    */
-  _renderWindRose(canvas, points, s, theme, legendPlaceholder) {
+  _createWindRosePlugin(theme, points, sensorAttrs) {
     const avg = typeof sensorAttrs.stats_avg === 'number' ? sensorAttrs.stats_avg : 0;
     const mode = typeof sensorAttrs.stats_mode === 'number' ? sensorAttrs.stats_mode : 0;
     const vari = typeof sensorAttrs.stats_var === 'number' ? sensorAttrs.stats_var : 0;
@@ -1178,48 +1172,70 @@ console.log('rendering', meta.id, 'points count', points.length, 'firstX', point
    * Po vykreslení doplní legendu statistik do legendPlaceholder.
    */
   _renderWindRose(canvas, points, theme, s, legendPlaceholder) {
-    // zničit starou instanci, pokud existuje
-    if (this._charts[canvas.id]) {
-      try { this._charts[canvas.id].destroy(); } catch (e) { console.warn('destroy windrose failed', e); }
-      delete this._charts[canvas.id];
-    }
+  // bezpečné ID pro indexaci chartů
+  const cid = canvas.id || `pm-graph-${Math.random().toString(36).slice(2,9)}`;
 
-    // vytvoříme jednoduchý Chart objekt, plugin provede vlastní kresbu
-    const cfg = {
-      type: 'polarArea', // typ je formální; plugin provede vlastní kresbu
-      data: { datasets: [] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { r: { display: false } }
-      },
-      plugins: [ this._createWindRosePlugin(theme, points, s) ]
-    };
-
-    // inicializace Chart v try/catch
-    let chart;
+  // zničit starou instanci, pokud existuje
+  if (this._charts && this._charts[cid]) {
     try {
-      chart = new Chart(canvas.getContext('2d'), cfg);
-      this._charts[canvas.id] = chart;
+      this._charts[cid].destroy();
     } catch (e) {
-      console.error('WindRose Chart init failed for', canvas.id, e);
-      return;
+      console.warn('destroy windrose failed', cid, e);
     }
+    delete this._charts[cid];
+  }
 
-    // zajistit korektní velikost a vykreslení po vložení do DOM
-    requestAnimationFrame(() => {
-      try { chart.resize(); } catch (e) { console.warn('chart.resize failed', e); }
-    });
+  // zajistit, že canvas má kontext
+  const ctx = canvas.getContext ? canvas.getContext('2d') : null;
+  if (!ctx) {
+    console.error('WindRose: canvas context not available', canvas);
+    return;
+  }
 
-    // doplnit legendu statistik do placeholderu (pokud existuje)
-    if (legendPlaceholder) {
+  // Konfigurace Chartu: typ je formální, skutečná kresba proběhne v pluginu
+  const cfg = {
+    type: 'polarArea',
+    data: { datasets: [] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { r: { display: false } }
+    },
+    plugins: [ this._createWindRosePlugin(theme, points, s) ]
+  };
+
+  // Inicializace Chartu
+  let chart;
+  try {
+    chart = new Chart(ctx, cfg);
+    // uložit chart pod canvas id
+    if (!this._charts) this._charts = {};
+    this._charts[cid] = chart;
+  } catch (e) {
+    console.error('WindRose Chart init failed for', cid, e);
+    return;
+  }
+
+  // Po vložení do DOM zajistit korektní resize a redraw
+  requestAnimationFrame(() => {
+    try { chart.resize(); } catch (e) { console.warn('chart.resize failed', e); }
+    try { chart.render(); } catch (e) { /* render může být volán pluginem */ }
+  });
+
+  // Doplňování legendy statistik do placeholderu (AVG / MODE / VAR)
+  if (legendPlaceholder) {
+    try {
       legendPlaceholder.innerHTML = '';
-      const color = s.graph_color || '#009688';
-      const legendEl = this._createStatsLegend(s, color, true);
+      const color = (s && s.graph_color) ? s.graph_color : '#009688';
+      // Vytvoříme legendu; _createStatsLegend vrací element, který zobrazuje '-' pro chybějící hodnoty
+      const legendEl = this._createStatsLegend(s || {}, color, true, { showDash: true });
       legendPlaceholder.appendChild(legendEl);
+    } catch (e) {
+      console.warn('Failed to append windrose legend', e);
     }
   }
 }
 
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
+  
