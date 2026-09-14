@@ -35,10 +35,7 @@ Chart.register(
 const GRID_COLOR = 'rgba(255,255,255,0.2)';
 
 // Popisky pro 16 směrů větrné růžice
-const WIND_DIR_LABELS = [
-  'N','NNE','NE','ENE','E','ESE','SE','SSE',
-  'S','SSW','SW','WSW','W','WNW','NW','NNW'
-];
+const WIND_DIR_LABELS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 
 /**
  * Bezpečně vytáhne hodnotu CSS proměnné z Home Assistenta.
@@ -110,7 +107,10 @@ function historyToPoints(raw) {
 
     if (!rawTs || rawState === undefined) return null;
 
-    const ts = typeof rawTs === 'number' ? rawTs * 1000 : Date.parse(rawTs);
+    // Pokud je čas ve formátu Unix timestampu (float/int), rozlišíme sekundy vs milisekundy
+    const ts = typeof rawTs === 'number'
+      ? (rawTs > 1e12 ? rawTs : rawTs * 1000) // pokud už je v ms, nepřepočítávej
+      : Date.parse(rawTs);
     const val = Number(rawState);
 
     if (isNaN(ts) || isNaN(val)) return null;
@@ -345,7 +345,7 @@ class PocasiMeteoCard extends HTMLElement {
         flex-wrap: wrap;
         gap: 16px;
         margin-top: 8px;
-        align-items: stretch;
+        align-items: flex-start;
         width: 100%;
         box-sizing: border-box;
       }
@@ -622,7 +622,13 @@ class PocasiMeteoCard extends HTMLElement {
         const canvas = document.createElement('canvas');
         canvas.className = 'pm-graph';
         canvas.id = `pm-graph-${s.id}`;
-
+        // zajistit, že canvas má CSS rozměry i interní pixelové rozlišení
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        // nastavit interní rozlišení podle devicePixelRatio pro ostré vykreslení
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.floor((chartWrapper.clientWidth || 300) * dpr);
+        canvas.height = Math.floor((chartWrapper.clientHeight || 180) * dpr);
         tile.appendChild(titleElement);
         tile.appendChild(canvas);
 
@@ -888,6 +894,9 @@ class PocasiMeteoCard extends HTMLElement {
       afterDraw(chart) {
         chart.$bins = bins;
 
+        // bezpečnost: chartArea nemusí být dostupné při prvním volání
+        if (!chart.chartArea) return;
+        
         const { ctx, chartArea } = chart;
         const { cx, cy, R } = computeChartGeometry(chartArea);
         const maxBin = Math.max(...bins) || 1;
