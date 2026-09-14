@@ -717,22 +717,9 @@ console.warn('PM historyToPoints produced 0 points for', sensorId); //##
     Object.values(activeCanvases).forEach(entry => {
       const { canvas, meta, cleanName } = entry;
       const points = pointsMap[meta.id] || [];
-      // fallback: stats mohou být uloženy pod meta.id nebo pod meta.entity_id
-      let s = statsObj[meta.id] || statsObj[meta.entity_id] || {};
 
-      // pokud stále chybí statistiky, spočítáme jednoduchý fallback z points
-      if ((!s || Object.keys(s).length === 0) && points && points.length) {
-        const vals = points.map(p => Number(p.y)).filter(v => !isNaN(v));
-        if (vals.length) {
-          s = {
-            stats_min: Math.min(...vals),
-            stats_max: Math.max(...vals),
-            stats_avg: vals.reduce((a,b)=>a+b,0)/vals.length,
-            stats_mode: null,
-            stats_var: null
-          };
-        }
-      }
+      // POUZE čteme statistiky z backendu; žádné doplňování ani přepisování
+      const s = statsObj[meta.id] || statsObj[meta.entity_id] || {};
 
       const gt = (meta.graph_type || '').toLowerCase();
       const isWindRose =
@@ -886,7 +873,7 @@ console.log('rendering', meta.id, 'points count', points.length, 'firstX', point
    * Vytvoří DOM element legendy se statistikami (barevné políčko + zkratka + hodnota).
    * Použitelné pro lineární grafy i windrose (pokud s obsahuje stats_*).
    */
-  _createStatsLegend(s, color, isWindRose = false) {
+  _createStatsLegend(s, color, isWindRose = false, opts = { showDash: true }) {
     const wrapper = document.createElement('div');
     wrapper.className = 'pm-stats-legend';
     wrapper.style.display = 'flex';
@@ -898,6 +885,9 @@ console.log('rendering', meta.id, 'points count', points.length, 'firstX', point
     wrapper.style.opacity = '0.9';
 
     const makeItem = (label, value, col) => {
+      // pokud hodnota neexistuje a nechceme dash, vrátíme null (nepřidá se)
+      if ((value === undefined || value === null) && !opts.showDash) return null;
+
       const item = document.createElement('div');
       item.className = 'pm-legend-item';
       item.style.display = 'flex';
@@ -913,7 +903,8 @@ console.log('rendering', meta.id, 'points count', points.length, 'firstX', point
       sw.style.background = col || color || '#3b82f6';
 
       const txt = document.createElement('span');
-      txt.textContent = `${label}: ${value != null ? Number(value).toFixed(1) : '—'}`;
+      // pokud hodnota chybí a showDash=true, zobrazíme pomlčku
+      txt.textContent = `${label}: ${value != null ? Number(value).toFixed(1) : (opts.showDash ? '-' : '')}`;
       txt.style.opacity = '0.95';
 
       item.appendChild(sw);
@@ -922,15 +913,17 @@ console.log('rendering', meta.id, 'points count', points.length, 'firstX', point
     };
 
     if (isWindRose) {
-      // windrose: Avg / Mode / Var (pokud jsou)
-      wrapper.appendChild(makeItem('AVG', s.stats_avg, '#ff0000'));
-      wrapper.appendChild(makeItem('MODE', s.stats_mode, '#0000ff'));
-      wrapper.appendChild(makeItem('VAR', s.stats_var, 'rgba(255,165,0,0.85)'));
+      // AVG / MODE / VAR (pokud existují)
+      const avgItem = makeItem('AVG', s.stats_avg, '#ff0000');
+      const modeItem = makeItem('MODE', s.stats_mode, '#0000ff');
+      const varItem = makeItem('VAR', s.stats_var, 'rgba(255,165,0,0.85)');
+      [avgItem, modeItem, varItem].forEach(it => { if (it) wrapper.appendChild(it); });
     } else {
-      // line chart: Min / Avg / Max
-      wrapper.appendChild(makeItem('Min', s.stats_min, 'red'));
-      wrapper.appendChild(makeItem('Avg', s.stats_avg, color));
-      wrapper.appendChild(makeItem('Max', s.stats_max, 'green'));
+      // Min / Avg / Max pro lineární grafy
+      const minItem = makeItem('Min', s.stats_min, 'red');
+      const avgItem = makeItem('Avg', s.stats_avg, color);
+      const maxItem = makeItem('Max', s.stats_max, 'green');
+      [minItem, avgItem, maxItem].forEach(it => { if (it) wrapper.appendChild(it); });
     }
 
     return wrapper;
