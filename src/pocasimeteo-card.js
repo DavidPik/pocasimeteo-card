@@ -651,41 +651,37 @@ class PocasiMeteoCard extends HTMLElement {
     const activeCanvases = {};
     const rawHistoryData = {};
 
-    // --- KROK 1: ASYNCHRONNÍ STAŽENÍ HISTORIE NA POZADÍ (BEZ MAZÁNÍ HTML) ---
-    const historyPromises = sensorsMeta.map(async currentSensor => {
-      const currentSensorId = currentSensor.id;
-      const targetEntityId = currentSensor.entity_id;
-      
-      const sState = hass.states[targetEntityId];
-      if (!sState) return;
+    // --- KROK 1: JEDINÝ HROMADNÝ FUNKČNÍ WEBSOCKET DOTAZ DO RECORDERU ---
+    // Sesbíráme pole reálných entity_id ze všech nakonfigurovaných senzorů
+    const activeEntityIds = sensorsMeta.map(s => s.entity_id).filter(id => id);
 
+    if (activeEntityIds.length > 0) {
       try {
-        console.log(`DIAGNOSTIKA START: Pokus o načtení historie pro ${currentSensorId} (${targetEntityId})`);
-
-        const history = await hass.callWS({
-          type: "history/list",
+        const resp = await hass.callWS({
+          type: "history/history_during_period",
           start_time: since,
           end_time: new Date().toISOString(),
-          entity_id: [targetEntityId],
+          entity_ids: activeEntityIds,
           minimal_response: false,
-          no_attributes: false
+          significant_changes_only: false,
+          no_attributes: true
         });
 
-        // BEZPEČNÝ DIAGNOSTICKÝ VÝPIS: Vypíše přesný obsah, který se z databáze vrátil
-        console.log(`DIAGNOSTIKA VÝSTUP: Senzor: ${currentSensorId}, Data z Recorderu:`, history);
+        // Home Assistant vrátí objekt, kde klíče jsou entity_id. Data bezpečně rozřadíme:
+        sensorsMeta.forEach(s => {
+          const entityId = s.entity_id;
+          rawHistoryData[s.id] = (resp && resp[entityId]) ? resp[entityId] : [];
+        });
 
-        if (history && history.length > 0) {
-          rawHistoryData[currentSensorId] = history;
-        } else {
-          rawHistoryData[currentSensorId] = [];
-        }
-      } catch (err) {
-        console.error(`DIAGNOSTIKA CHYBA: Načítání historie selhalo pro ${currentSensorId}:`, err);
-        rawHistoryData[currentSensorId] = [];
+        console.log("DIAGNOSTIKA SUCCESS: Data z Recorderu úspěšně stažena!", rawHistoryData);
+
+      } catch (e) {
+        console.error("DIAGNOSTIKA ERROR: Hromadný dotaz do Recorderu selhal:", e);
+        sensorsMeta.forEach(s => {
+          rawHistoryData[s.id] = [];
+        });
       }
-    });
-
-    await Promise.all(historyPromises);
+    }
 
     // --- KROK 2: DATOVÁ TRANSFORMACE DO PAMĚTI (Bod d) ---
     const pointsMap = {};
