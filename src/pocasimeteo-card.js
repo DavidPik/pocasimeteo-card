@@ -1236,6 +1236,8 @@ console.log('rendering', meta.id, 'points count', points.length, 'firstX', point
     }
   }
 }
+}
+}
 
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
   
