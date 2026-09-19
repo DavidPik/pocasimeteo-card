@@ -637,7 +637,12 @@ class PocasiMeteoCard extends HTMLElement {
     const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
 
     if (!primaryGraphs || !secondaryGraphs) return;
-    if (this.config.show_graphs === false || sensorsMeta.length === 0) return;
+    if (this.config.show_graphs === false) return;
+
+    if (sensorsMeta.length === 0) {
+      this._lastApiTimestamp = null; // Vynutíme pročištění otisku pro další okamžitý průchod
+      return;
+    }
 
     const graphsPerRow = Math.max(1, Number(this.config.graphs_per_row) || 2);
     const statsIntervalHours = typeof d.statistics_interval === 'number' ? d.statistics_interval : 24;
