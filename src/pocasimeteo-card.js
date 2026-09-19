@@ -1032,7 +1032,7 @@ console.log('rendering', meta.id, 'points count', points.length, 'firstX', point
         });
 
         // Hlavní osy
-        const degAxes = [0, 45, 90, 135, 180, 225, 270, 315];
+        const degAxes = Array.from({ length: 8 }, (_, i) => i * 45);
         degAxes.forEach(deg => {
           const a = (deg - 90) * Math.PI / 180;
           ctx.beginPath();
