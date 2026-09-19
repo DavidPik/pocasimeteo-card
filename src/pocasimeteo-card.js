@@ -483,14 +483,15 @@ class PocasiMeteoCard extends HTMLElement {
     secondaryGraphs.classList.add('pm-graphs');
     secondarySec.appendChild(secondaryGraphs);
 
+    // --- KLÍČOVÁ OPRAVA: Sekce vložíme do karty HNED TEĎ, aby měly správný kontext ---
     const card = this.shadowRoot.querySelector('.pm-card');
-    card.appendChild(primarySec);
-    card.appendChild(secondarySec);
+    if (card) {
+      card.appendChild(primarySec);
+      card.appendChild(secondarySec);
+    }
 
-    // Registr pro uložení referencí na vybudované canvasy
     this._activeCanvases = {};
 
-    // Pevný seznam senzorů sjednocený s backendem pro jednorázovou tvorbu DOMu
     const sensorDefinitions = [
       { id: 'teplota_vnejsi', type: 'primary' },
       { id: 'vlhkost_vnejsi', type: 'primary' },
@@ -539,7 +540,6 @@ class PocasiMeteoCard extends HTMLElement {
 
       targetContainer.appendChild(tile);
 
-      // Bezpečné uložení referencí pro pozdější asynchronní plnění daty
       this._activeCanvases[s.id] = {
         canvas,
         tile,
