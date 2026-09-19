@@ -758,7 +758,7 @@ class PocasiMeteoCard extends HTMLElement {
         datasets: [
           {
             label: cleanName,
-            data: points,
+            data: [points],
             borderColor: color,
             backgroundColor: rgba,
             tension: isStepped ? 0 : 0.3,
@@ -920,9 +920,14 @@ class PocasiMeteoCard extends HTMLElement {
     const chart = new Chart(canvas.getContext('2d'), cfg);
     this._charts[canvas.id] = chart;
 
-    requestAnimationFrame(() => { try { chart.resize(); } catch(e){} });
+     requestAnimationFrame(() => { 
+      try { 
+        chart.resize(); 
+        chart.update('none'); // 👍 Vynutí bezpečné vykreslení křivek bez animace
+      } catch(e){} 
+    });
 
-    // doplnit legendu statistik: pro lineární grafy chceme Min/Avg/Max
+    // doplnit legendu statistik: pro lineární grafy chceme jen Min/Max
     if (legendPlaceholder) {
       legendPlaceholder.innerHTML = '';
       const color = s.graph_color || '#3b82f6';
