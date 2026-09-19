@@ -107,10 +107,15 @@ function historyToPoints(raw) {
 
     if (!rawTs || rawState === undefined) return null;
 
-    // Pokud je čas ve formátu Unix timestampu (float/int), rozlišíme sekundy vs milisekundy
-    const ts = typeof rawTs === 'number'
-      ? (rawTs > 1e12 ? rawTs : rawTs * 1000) // pokud už je v ms, nepřepočítávej
-      : Date.parse(rawTs);
+    // Robustní převod času, který bezpečně zvládne ISO formáty s časovou zónou z HA Recorderu
+    let ts = NaN;
+    if (typeof rawTs === 'number') {
+      ts = rawTs > 1e12 ? rawTs : rawTs * 1000;
+    } else if (rawTs) {
+      const parsedDate = new Date(rawTs);
+      ts = parsedDate.getTime();
+    }
+    
     const val = Number(rawState);
 
     if (isNaN(ts) || isNaN(val)) return null;
