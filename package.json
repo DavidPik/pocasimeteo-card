@@ -1,6 +1,6 @@
 {
   "name": "pocasimeteo-card",
-  "version": "6.7.40",
+  "version": "6.7.41",
   "type": "module",
   "scripts": {
     "build": "rollup -c"
