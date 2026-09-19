@@ -102,14 +102,15 @@ function buildWindRose(points) {
 function historyToPoints(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.map(p => {
-    // Podpora pro zkrácené i plné klíče z HA Recorderu
     const rawTs = p.lu !== undefined ? p.lu : (p.lc !== undefined ? p.lc : (p.last_changed || p.last_updated));
     const rawState = p.s !== undefined ? p.s : p.state;
 
     if (rawTs === undefined || rawState === undefined) return null;
 
+    // Pokud integrace odevzdala výpadek (unknown/unavailable), bod zahodíme, aby nezpůsobil NaN pád grafu
+    if (rawState === 'unknown' || rawState === 'unavailable' || rawState === null) return null;
+
     let ts = NaN;
-    // Pokud je čas Unix timestamp (v sekundách), vynásobíme 1000 pro JavaScript milisekundy
     if (typeof rawTs === 'number') {
       ts = rawTs > 1e12 ? rawTs : Math.round(rawTs * 1000);
     } else if (rawTs) {
@@ -117,10 +118,12 @@ function historyToPoints(raw) {
       ts = parsedDate.getTime();
     }
     
-    const val = Number(rawState);
+    // Striktní převod textového Stringu na plovoucí číslo (float) pro Chart.js
+    const val = parseFloat(rawState);
+    
     if (isNaN(ts) || isNaN(val)) return null;
     return { x: ts, y: val };
-  }).filter(p => p && !isNaN(p.x) && !isNaN(p.y));
+  }).filter(p => p && p.x !== null && !isNaN(p.x) && !isNaN(p.y));
 }
 
 /**
