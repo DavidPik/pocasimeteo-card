@@ -662,35 +662,34 @@ class PocasiMeteoCard extends HTMLElement {
       });
     });
 
-    // --- KROK 2: NAČTENÍ HISTORIE Z RECORDERU (Bezpečné individuální dotazy) ---
-    const historyPromises = Object.values(activeCanvases).map(async entry => {
-      const entityId = entry.meta.entity_id;
+    // --- KROK 2: JEDINÝ HROMADNÝ FUNKČNÍ WEBSOCKET DOTAZ DO RECORDERU ---
+    // Sesbíráme pole reálných entity_id ze všech aktivních canvasů
+    const activeEntityIds = Object.values(activeCanvases).map(entry => entry.meta.entity_id);
 
+    if (activeEntityIds.length > 0) {
       try {
-        const history = await hass.callWS({
-          type: "history/list",
+        const resp = await hass.callWS({
+          type: "history/history_during_period",
           start_time: since,
           end_time: new Date().toISOString(),
-          entity_id: entityId,
+          entity_ids: activeEntityIds,
           minimal_response: false,
-          no_attributes: false
+          significant_changes_only: false,
+          no_attributes: true
         });
 
-        // Oprava parsování odpovědi pro history/list
-        if (!history || history.length === 0) {
+        // Správné rozřazení: history_during_period vrací objekt, kde klíče jsou entity_id
+        Object.values(activeCanvases).forEach(entry => {
+          const entityId = entry.meta.entity_id;
+          rawHistoryData[entry.meta.id] = (resp && resp[entityId]) ? resp[entityId] : [];
+        });
+      } catch (e) {
+        console.error("Hromadný dotaz do Recorderu selhal, zkouším prázdné sady:", e);
+        Object.values(activeCanvases).forEach(entry => {
           rawHistoryData[entry.meta.id] = [];
-        } else if (Array.isArray(history[0])) {
-          rawHistoryData[entry.meta.id] = history[0];
-        } else if (Array.isArray(history)) {
-          rawHistoryData[entry.meta.id] = history;
-        } else {
-          rawHistoryData[entry.meta.id] = [];
-        }
-      } catch (err) {
-        console.error('Načítání historie selhalo pro senzor:', entry.meta.id, err);
-        rawHistoryData[entry.meta.id] = [];
+        });
       }
-    });
+    }
 
     await Promise.all(historyPromises);
 
