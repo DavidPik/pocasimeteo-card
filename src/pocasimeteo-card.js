@@ -486,6 +486,68 @@ class PocasiMeteoCard extends HTMLElement {
     const card = this.shadowRoot.querySelector('.pm-card');
     card.appendChild(primarySec);
     card.appendChild(secondarySec);
+
+    // Registr pro uložení referencí na vybudované canvasy
+    this._activeCanvases = {};
+
+    // Pevný seznam senzorů sjednocený s backendem pro jednorázovou tvorbu DOMu
+    const sensorDefinitions = [
+      { id: 'teplota_vnejsi', type: 'primary' },
+      { id: 'vlhkost_vnejsi', type: 'primary' },
+      { id: 'tlak_relativni', type: 'primary' },
+      { id: 'srazky_intenzita', type: 'primary' },
+      { id: 'vitr_rychlost', type: 'primary' },
+      { id: 'vitr_narazy', type: 'primary' },
+      { id: 'vitr_smer', type: 'primary' },
+      { id: 'slunecni_zareni', type: 'primary' },
+      { id: 'uv_index', type: 'primary' },
+      { id: 'teplota_vnitrni', type: 'secondary' },
+      { id: 'vlhkost_vnitrni', type: 'secondary' }
+    ];
+
+    sensorDefinitions.forEach(s => {
+      const targetContainer = s.type === 'primary' ? primaryGraphs : secondaryGraphs;
+
+      const tile = document.createElement('div');
+      tile.className = 'pm-graph-tile';
+      tile.id = `tile-${s.id}`;
+
+      const titleElement = document.createElement('div');
+      titleElement.className = 'pm-graph-title';
+      titleElement.id = `title-${s.id}`;
+      titleElement.textContent = s.id.replace('_', ' ').toUpperCase();
+
+      const canvas = document.createElement('canvas');
+      canvas.className = 'pm-graph';
+      canvas.id = `pm-graph-${s.id}`;
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+
+      const chartWrapper = document.createElement('div');
+      chartWrapper.style.position = 'relative';
+      chartWrapper.style.width = '100%';
+      chartWrapper.style.height = s.id === 'vitr_smer' ? '260px' : '180px';
+
+      chartWrapper.appendChild(canvas);
+      tile.appendChild(titleElement);
+      tile.appendChild(chartWrapper);
+
+      const legendPlaceholder = document.createElement('div');
+      legendPlaceholder.className = 'pm-stats-placeholder';
+      legendPlaceholder.style.minHeight = '22px';
+      tile.appendChild(legendPlaceholder);
+
+      targetContainer.appendChild(tile);
+
+      // Bezpečné uložení referencí pro pozdější asynchronní plnění daty
+      this._activeCanvases[s.id] = {
+        canvas,
+        tile,
+        titleElement,
+        legendPlaceholder,
+        id: s.id
+      };
+    });
   }
 
   /**
@@ -604,6 +666,7 @@ class PocasiMeteoCard extends HTMLElement {
         } else {
           rawHistoryData[s.id] = [];
         }
+        console.log("DIAGNOSTIKA METEO STANICE:", s.id, "Syrová data z HA:", history); //##
       } catch (err) {
         rawHistoryData[s.id] = [];
       }
@@ -637,87 +700,58 @@ class PocasiMeteoCard extends HTMLElement {
       pointsMap[s.id] = pts;
     });
 
-    // --- KROK 3: TEPRVE TEĎ JEDNORÁZOVĚ VYMAŽEME A VYSTAVÍME DOM ---
-    primaryGraphs.innerHTML = '';
-    secondaryGraphs.innerHTML = '';
+    // --- KROK 3: NASTAVENÍ MŘÍŽKY GRAFŮ BEZ MAZÁNÍ HTML ---
     primaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
     secondaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
 
-    const targetSections = [
-      { type: 'primary', container: primaryGraphs },
-      { type: 'secondary', container: secondaryGraphs }
-    ];
+    const theme = computeTheme(this);
 
-    targetSections.forEach(section => {
-      const filteredMeta = sensorsMeta.filter(s => {
-        const isCorrectType = s.type === section.type;
-        const isVisible = s.visible !== false;
-        const isNotHidden = !Array.isArray(this.config.hide_sensors) || !this.config.hide_sensors.includes(s.id);
-        return isCorrectType && isVisible && isNotHidden;
-      });
+    // --- KROK 4: PASIVNÍ PLŇENÍ GEOMETRIE A VYKRESLENÍ GRAFŮ Z PAMĚTI ---
+    sensorsMeta.forEach(s => {
+      const domItem = this._activeCanvases[s.id];
+      if (!domItem) return;
 
-      filteredMeta.forEach(s => {
-        const sState = hass.states[s.entity_id];
-        if (!sState) return;
+      const sState = hass.states[s.entity_id];
+      
+      // Pokud uživatel skryl senzor v konfiguraci, dlaždici zneviditelníme bez destrukce DOMu
+      const isVisible = s.visible !== false && (!Array.isArray(this.config.hide_sensors) || !this.config.hide_sensors.includes(s.id));
+      domItem.tile.style.display = isVisible ? 'flex' : 'none';
+      if (!isVisible || !sState) return;
 
-        const tile = document.createElement('div');
-        tile.className = 'pm-graph-tile';
+      // Aktualizace textu nadpisu s jednotkou reálně z HA stavu
+      const unit = sState.attributes.unit_of_measurement || '';
+      const rawFriendlyName = sState.attributes.friendly_name || s.id;
+      const stationTitle = entity.attributes.friendly_name || '';
+      let cleanGraphName = rawFriendlyName.indexOf(stationTitle) === 0 
+        ? rawFriendlyName.substring(stationTitle.length).trim() 
+        : rawFriendlyName;
 
-        const unit = sState.attributes.unit_of_measurement || '';
-        const rawFriendlyName = sState.attributes.friendly_name || s.id;
-        const stationTitle = entity.attributes.friendly_name || '';
-        let cleanGraphName = rawFriendlyName.indexOf(stationTitle) === 0 
-          ? rawFriendlyName.substring(stationTitle.length).trim() 
-          : rawFriendlyName;
+      if (cleanGraphName.length > 0) {
+        cleanGraphName = cleanGraphName.charAt(0).toUpperCase() + cleanGraphName.slice(1);
+      }
+      domItem.titleElement.textContent = cleanGraphName + (unit ? ` (${unit})` : '');
 
-        if (cleanGraphName.length > 0) {
-          cleanGraphName = cleanGraphName.charAt(0).toUpperCase() + cleanGraphName.slice(1);
-        }
-
-        const titleElement = document.createElement('div');
-        titleElement.className = 'pm-graph-title';
-        titleElement.textContent = cleanGraphName + (unit ? ` (${unit})` : '');
-
-        const canvas = document.createElement('canvas');
-        canvas.className = 'pm-graph';
-        canvas.id = `pm-graph-${s.id}`;
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-
-        const chartWrapper = document.createElement('div');
-        chartWrapper.style.position = 'relative';
-        chartWrapper.style.width = '100%';
-        chartWrapper.style.height = s.id === 'vitr_smer' ? '260px' : '180px';
-
-        chartWrapper.appendChild(canvas);
-        tile.appendChild(titleElement);
-        tile.appendChild(chartWrapper);
-
-        const legendPlaceholder = document.createElement('div');
-        legendPlaceholder.className = 'pm-stats-placeholder';
-        legendPlaceholder.style.minHeight = '22px';
-        tile.appendChild(legendPlaceholder);
-
-        section.container.appendChild(tile);
-
-        const dpr = window.devicePixelRatio || 1;
+      // Nastavení rozlišení plátna podle aktuálního okna
+      const dpr = window.devicePixelRatio || 1;
+      const canvas = domItem.canvas;
+      const chartWrapper = canvas.parentElement;
+      if (chartWrapper) {
         canvas.width = Math.floor((chartWrapper.clientWidth || 300) * dpr);
         canvas.height = Math.floor((chartWrapper.clientHeight || 180) * dpr);
+      }
 
-        // --- KROK 4: OKAMŽITÉ PASIVNÍ VYKRESLENÍ Z PAMĚTI ---
-        const points = pointsMap[s.id] || [];
-        const currentStats = statsObj[s.id] || statsObj[s.entity_id] || {};
-        const theme = computeTheme(this);
+      // Vlastní vykreslení
+      const points = pointsMap[s.id] || [];
+      const currentStats = statsObj[s.id] || statsObj[s.entity_id] || {};
 
-        const gt = (s.graph_type || '').toLowerCase();
-        const isWindRose = gt === 'wind_rose' || gt === 'windrose' || s.id === 'vitr_smer';
+      const gt = (s.graph_type || '').toLowerCase();
+      const isWindRose = gt === 'wind_rose' || gt === 'windrose' || s.id === 'vitr_smer';
 
-        if (isWindRose) {
-          this._renderWindRose(canvas, points, theme, currentStats, legendPlaceholder);
-        } else {
-          this._renderLineChart(canvas, points, cleanGraphName, theme, currentStats, statsIntervalHours, legendPlaceholder);
-        }
-      });
+      if (isWindRose) {
+        this._renderWindRose(canvas, points, theme, currentStats, domItem.legendPlaceholder);
+      } else {
+        this._renderLineChart(canvas, points, cleanGraphName, theme, currentStats, statsIntervalHours, domItem.legendPlaceholder);
+      }
     });
   }
 
