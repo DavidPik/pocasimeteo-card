@@ -662,17 +662,17 @@ class PocasiMeteoCard extends HTMLElement {
           start_time: since,
           end_time: new Date().toISOString(),
           entity_ids: activeEntityIds,
-          minimal_response: true, // 👍 Vrátí pouze stavy a časy, což dramaticky zrychlí dotaz
-          significant_changes_only: false
+          minimal_response: false,          // 👍 VYPNUTO: Chceme kompletní nezkrácené záznamy
+          significant_changes_only: false,  // 👍 VYPNUTO: Recorder vrátí KAŽDÝ zapsaný update integrace
+          no_attributes: true               // 👍 Zajišťuje striktní ořezání podle start_time přímo v DB
         });
 
-        // Home Assistant vrátí objekt, kde klíče jsou entity_id. Data bezpečně rozřadíme:
+        // Home Assistant vrátí objekt, kde klíče jsou entity_id. Rozřadíme je do rawHistoryData pod ID senzoru:
         sensorsMeta.forEach(s => {
-          const entityId = s.entity_id;
-          rawHistoryData[s.id] = (resp && resp[entityId]) ? resp[entityId] : [];
+          rawHistoryData[s.id] = (resp && resp[s.entity_id]) ? resp[s.entity_id] : [];
         });
 
-        console.log("DIAGNOSTIKA SUCCESS: Data z Recorderu úspěšně stažena!", rawHistoryData);
+        console.log("DIAGNOSTIKA SUCCESS: Data z Recorderu úspěšně stažena v plné četnosti!", rawHistoryData);
 
       } catch (e) {
         console.error("DIAGNOSTIKA ERROR: Hromadný dotaz do Recorderu selhal:", e);
@@ -684,6 +684,8 @@ class PocasiMeteoCard extends HTMLElement {
 
     // --- KROK 2: DATOVÁ TRANSFORMACE DO PAMĚTI (Bod d) ---
     const pointsMap = {};
+    const cutoffTime = Date.now() - (statsIntervalHours || 24) * 3600 * 1000;
+
     sensorsMeta.forEach(s => {
       const raw = rawHistoryData[s.id] || [];
       let pts = historyToPoints(raw);
