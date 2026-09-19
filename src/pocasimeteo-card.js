@@ -671,7 +671,7 @@ class PocasiMeteoCard extends HTMLElement {
           type: "history/list",
           start_time: since,
           end_time: new Date().toISOString(),
-          entity_id: [entityId],
+          entity_id: entityId,
           minimal_response: false,
           no_attributes: false
         });
