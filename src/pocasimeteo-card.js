@@ -682,13 +682,16 @@ class PocasiMeteoCard extends HTMLElement {
       }
     }
 
-    // --- KROK 2: DATOVÁ TRANSFORMACE DO PAMĚTI (Bod d) ---
+    // --- KROK 2: DATOVÁ TRANSFORMACE DO PAMĚTI S ČASOVOU FILTRACÍ ---
     const pointsMap = {};
+    // Spočítáme časovou hranici (přesný timestamp před 24 hodinami v ms)
     const cutoffTime = Date.now() - (statsIntervalHours || 24) * 3600 * 1000;
 
     sensorsMeta.forEach(s => {
       const raw = rawHistoryData[s.id] || [];
-      let pts = historyToPoints(raw);
+      
+      // Transformujeme na souřadnice a odfiltrujeme body starší než 24 hodin
+      let pts = historyToPoints(raw).filter(p => p.x >= cutoffTime);
 
       if (pts.length === 0) {
         const sState = hass.states[s.entity_id];
