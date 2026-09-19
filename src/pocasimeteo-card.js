@@ -733,8 +733,6 @@ class PocasiMeteoCard extends HTMLElement {
         gt === 'windrose' ||
         meta.id === 'vitr_smer' || meta.id === 'wind_direction';
 
-console.log('rendering', meta.id, 'points count', points.length, 'firstX', pts[0]?.x, 'lastX', points[points.length-1]?.x); //##
-      
       // předáme i legendPlaceholder, který jsme uložili v activeCanvases
       if (isWindRose) {
         this._renderWindRose(canvas, points, theme, s, activeCanvases[meta.id].legendPlaceholder);
