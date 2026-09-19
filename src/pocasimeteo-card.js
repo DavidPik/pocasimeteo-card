@@ -821,28 +821,30 @@ class PocasiMeteoCard extends HTMLElement {
       data: {
         datasets: [
           {
+            type: 'line',         // 👍 Vynutí typ čárového grafu pro tento dataset
             label: cleanName,
-            data: [points],
+            data: [...points],
             borderColor: color,
             backgroundColor: rgba,
             tension: isStepped ? 0 : 0.3,
             stepped: isStepped,
             pointRadius: 0,
-            borderWidth: 2
+            borderWidth: 2,
+            showLine: true        // 👍 Explicitně povolí vykreslení spojité křivky
           },
           {
+            type: 'scatter',      // 👍 Izoluje minimum jako nezávislý bodový prvek
             label: 'Min: ' + min.toFixed(1),
             data: minPoint ? [{ x: minPoint.x, y: minPoint.y }] : [],
             pointRadius: 6,
-            pointBackgroundColor: 'red',
-            showLine: false
+            pointBackgroundColor: 'red'
           },
           {
+            type: 'scatter',      // 👍 Izoluje maximum jako nezávislý bodový prvek
             label: 'Max: ' + max.toFixed(1),
             data: maxPoint ? [{ x: maxPoint.x, y: maxPoint.y }] : [],
             pointRadius: 6,
-            pointBackgroundColor: 'green',
-            showLine: false
+            pointBackgroundColor: 'green'
           }
         ]
       },
