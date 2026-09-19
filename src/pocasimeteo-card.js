@@ -654,6 +654,9 @@ class PocasiMeteoCard extends HTMLElement {
     // --- KROK 1: ASYNCHRONNÍ STAŽENÍ HISTORIE NA POZADÍ (BEZ MAZÁNÍ HTML) ---
     const historyPromises = sensorsMeta.map(async s => {
       const sState = hass.states[s.entity_id];
+
+      console.log("DIAGNOSTIKA METEO STANICE:", s.id, "Going to try read data from HA"); //##
+      
       if (!sState) return;
 
       try {
@@ -666,17 +669,20 @@ class PocasiMeteoCard extends HTMLElement {
           no_attributes: false
         });
 
+        console.log("DIAGNOSTIKA METEO STANICE:", s.id, "Syrová data z HA:", history); //##
+
         if (history && history.length > 0) {
           rawHistoryData[s.id] = Array.isArray(history[0]) ? history[0] : history;
         } else {
           rawHistoryData[s.id] = [];
         }
-        console.log("DIAGNOSTIKA METEO STANICE:", s.id, "Syrová data z HA:", history); //##
       } catch (err) {
         rawHistoryData[s.id] = [];
       }
     });
 
+    console.log("DIAGNOSTIKA METEO STANICE:", s.id, "Going to transform data from HA"); //##
+    
     await Promise.all(historyPromises);
 
     // --- KROK 2: DATOVÁ TRANSFORMACE DO PAMĚTI (Bod d) ---
