@@ -662,9 +662,8 @@ class PocasiMeteoCard extends HTMLElement {
           start_time: since,
           end_time: new Date().toISOString(),
           entity_ids: activeEntityIds,
-          minimal_response: false,
-          significant_changes_only: false,
-          no_attributes: true
+          minimal_response: true, // 👍 Vrátí pouze stavy a časy, což dramaticky zrychlí dotaz
+          significant_changes_only: false
         });
 
         // Home Assistant vrátí objekt, kde klíče jsou entity_id. Data bezpečně rozřadíme:
