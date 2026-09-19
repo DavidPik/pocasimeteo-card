@@ -662,9 +662,9 @@ class PocasiMeteoCard extends HTMLElement {
           start_time: since,
           end_time: new Date().toISOString(),
           entity_ids: activeEntityIds,
-          minimal_response: false,          // 👍 VYPNUTO: Chceme kompletní nezkrácené záznamy
-          significant_changes_only: false,  // 👍 VYPNUTO: Recorder vrátí KAŽDÝ zapsaný update integrace
-          no_attributes: true               // 👍 Zajišťuje striktní ořezání podle start_time přímo v DB
+          minimal_response: false,
+          significant_changes_only: false,
+          no_attributes: false
         });
 
         // Home Assistant vrátí objekt, kde klíče jsou entity_id. Rozřadíme je do rawHistoryData pod ID senzoru:
@@ -748,10 +748,9 @@ class PocasiMeteoCard extends HTMLElement {
       const dpr = window.devicePixelRatio || 1;
       const canvas = domItem.canvas;
       const chartWrapper = canvas.parentElement;
-      if (chartWrapper) {
-        canvas.width = Math.floor((chartWrapper.clientWidth || 300) * dpr);
-        canvas.height = Math.floor((chartWrapper.clientHeight || 180) * dpr);
-      }
+      const targetHeight = s.id === 'vitr_smer' ? 260 : 180; // Dynamický fallback podle typu grafu
+      canvas.width = Math.floor((chartWrapper.clientWidth || 300) * dpr);
+      canvas.height = Math.floor((chartWrapper.clientHeight || targetHeight) * dpr);
 
       // Vlastní vykreslení
       const points = pointsMap[s.id] || [];
