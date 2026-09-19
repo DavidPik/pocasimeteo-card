@@ -662,52 +662,58 @@ class PocasiMeteoCard extends HTMLElement {
       });
     });
 
-    // --- KROK 2: NAČTENÍ HISTORIE Z RECORDERU ---
-    const historyPromises = Object.values(activeCanvases).map(async entry => {
-      const entityId = entry.meta.entity_id;
+    // --- KROK 2: JEDINÝ HROMADNÝ FUNKČNÍ WEBSOCKET DOTAZ DO RECORDERU ---
+    // Vytáhneme ID všech entit, které chceme vykreslit
+    const activeEntityIds = Object.values(activeCanvases).map(entry => entry.meta.entity_id);
 
+    if (activeEntityIds.length > 0) {
       try {
-        const history = await hass.callWS({
-          type: "history/list",
+        const resp = await hass.callWS({
+          type: "history/history_during_period",
           start_time: since,
           end_time: new Date().toISOString(),
-          entity_id: [entityId],
+          entity_ids: activeEntityIds,
           minimal_response: false,
-          no_attributes: false
+          significant_changes_only: false,
+          no_attributes: true
         });
 
-        // Robustní log a normalizace tvaru odpovědi
-console.log('PM history raw', entityId, history); //##
-        if (!history || history.length === 0) {
+        // Rozřadíme přijatou historii podle jednotlivých sensor ID z integrace
+        Object.values(activeCanvases).forEach(entry => {
+          const entityId = entry.meta.entity_id;
+          rawHistoryData[entry.meta.id] = (resp && resp[entityId]) ? resp[entityId] : [];
+        });
+      } catch (e) {
+        console.error("Hromadný dotaz do Recorderu selhal, zkouším prázdné sady:", e);
+        Object.values(activeCanvases).forEach(entry => {
           rawHistoryData[entry.meta.id] = [];
-        } else if (Array.isArray(history[0])) {
-          // standardní tvar: [ [stateObj, stateObj, ...] ]
-          rawHistoryData[entry.meta.id] = history[0];
-        } else if (Array.isArray(history)) {
-          // někdy může přijít přímo pole stateObj
-          rawHistoryData[entry.meta.id] = history;
-        } else {
-          rawHistoryData[entry.meta.id] = [];
-        }
-      } catch (err) {
-console.log('no PM history'); //##
-        rawHistoryData[entry.meta.id] = [];
+        });
       }
-    });
+    }
 
-    await Promise.all(historyPromises);
-
-    // --- KROK 3: TRANSFORMACE HISTORIE NA BODY ---
+    // --- KROK 3: TRANSFORMACE HISTORIE NA BODY S JEDNOBODOVÝM FALLBACKEM ---
     const pointsMap = {};
     Object.keys(rawHistoryData).forEach(sensorId => {
       const raw = rawHistoryData[sensorId] || [];
       const pts = historyToPoints(raw);
-      if (!raw || raw.length === 0) {
-console.warn('PM no history for sensor', sensorId, 'raw:', raw); //##
+      
+      // Fallback: Pokud Recorder pro dané období nemá žádná data (např. po restartu), 
+      // vygenerujeme dva umělé body z aktuálního živého stavu senzoru, aby graf nezůstal viset.
+      if (pts.length === 0) {
+        const domItem = activeCanvases[sensorId];
+        if (domItem) {
+          const sState = hass.states[domItem.meta.entity_id];
+          const val = sState ? Number(sState.state) : NaN;
+          if (!isNaN(val)) {
+            const now = Date.now();
+            pts.push({ x: now - 60000, y: val }, { x: now, y: val });
+          }
+        }
+      } else if (pts.length === 1) {
+        // Oprava jednobodové historie: duplikujeme hodnotu do aktuálního času
+        pts.push({ x: Date.now(), y: pts[0].y });
       }
-      if (!pts || pts.length === 0) {
-console.warn('PM historyToPoints produced 0 points for', sensorId); //##
-      }
+      
       pointsMap[sensorId] = pts;
     });
 
