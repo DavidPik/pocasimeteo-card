@@ -662,43 +662,46 @@ class PocasiMeteoCard extends HTMLElement {
       });
     });
 
-    // --- KROK 2: JEDINÝ HROMADNÝ FUNKČNÍ WEBSOCKET DOTAZ DO RECORDERU ---
-    // Vytáhneme ID všech entit, které chceme vykreslit
-    const activeEntityIds = Object.values(activeCanvases).map(entry => entry.meta.entity_id);
+    // --- KROK 2: NAČTENÍ HISTORIE Z RECORDERU (Bezpečné individuální dotazy) ---
+    const historyPromises = Object.values(activeCanvases).map(async entry => {
+      const entityId = entry.meta.entity_id;
 
-    if (activeEntityIds.length > 0) {
       try {
-        const resp = await hass.callWS({
-          type: "history/history_during_period",
+        const history = await hass.callWS({
+          type: "history/list",
           start_time: since,
           end_time: new Date().toISOString(),
-          entity_ids: activeEntityIds,
+          entity_id: [entityId],
           minimal_response: false,
-          significant_changes_only: false,
-          no_attributes: true
+          no_attributes: false
         });
 
-        // Rozřadíme přijatou historii podle jednotlivých sensor ID z integrace
-        Object.values(activeCanvases).forEach(entry => {
-          const entityId = entry.meta.entity_id;
-          rawHistoryData[entry.meta.id] = (resp && resp[entityId]) ? resp[entityId] : [];
-        });
-      } catch (e) {
-        console.error("Hromadný dotaz do Recorderu selhal, zkouším prázdné sady:", e);
-        Object.values(activeCanvases).forEach(entry => {
+        // Oprava parsování odpovědi pro history/list
+        if (!history || history.length === 0) {
           rawHistoryData[entry.meta.id] = [];
-        });
+        } else if (Array.isArray(history[0])) {
+          rawHistoryData[entry.meta.id] = history[0];
+        } else if (Array.isArray(history)) {
+          rawHistoryData[entry.meta.id] = history;
+        } else {
+          rawHistoryData[entry.meta.id] = [];
+        }
+      } catch (err) {
+        console.error('Načítání historie selhalo pro senzor:', entry.meta.id, err);
+        rawHistoryData[entry.meta.id] = [];
       }
-    }
+    });
+
+    await Promise.all(historyPromises);
 
     // --- KROK 3: TRANSFORMACE HISTORIE NA BODY S JEDNOBODOVÝM FALLBACKEM ---
     const pointsMap = {};
     Object.keys(rawHistoryData).forEach(sensorId => {
       const raw = rawHistoryData[sensorId] || [];
       const pts = historyToPoints(raw);
-      
-      // Fallback: Pokud Recorder pro dané období nemá žádná data (např. po restartu), 
-      // vygenerujeme dva umělé body z aktuálního živého stavu senzoru, aby graf nezůstal viset.
+
+      // --- ZDE JE HLAVNÍ OPRAVA PRO BOD V GRAFU ---
+      // Pokud v databázi ještě nejsou body (nový senzor), vytvoříme čáru z aktuálního živého stavu v HA
       if (pts.length === 0) {
         const domItem = activeCanvases[sensorId];
         if (domItem) {
@@ -710,10 +713,10 @@ class PocasiMeteoCard extends HTMLElement {
           }
         }
       } else if (pts.length === 1) {
-        // Oprava jednobodové historie: duplikujeme hodnotu do aktuálního času
+        // Oprava jednobodové historie: duplikujeme bod do aktuálního času, aby Chart.js mohl vykreslit čáru
         pts.push({ x: Date.now(), y: pts[0].y });
       }
-      
+
       pointsMap[sensorId] = pts;
     });
 
