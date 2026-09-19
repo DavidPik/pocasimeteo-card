@@ -674,7 +674,7 @@ class PocasiMeteoCard extends HTMLElement {
           rawHistoryData[s.id] = (resp && resp[s.entity_id]) ? resp[s.entity_id] : [];
         });
 
-        console.log("DIAGNOSTIKA SUCCESS: Data z Recorderu úspěšně stažena v plné četnosti!", rawHistoryData);
+        //##  console.log("DIAGNOSTIKA SUCCESS: Data z Recorderu úspěšně stažena v plné četnosti!", rawHistoryData);
 
       } catch (e) {
         console.error("DIAGNOSTIKA ERROR: Hromadný dotaz do Recorderu selhal:", e);
@@ -758,6 +758,17 @@ class PocasiMeteoCard extends HTMLElement {
       const points = pointsMap[s.id] || [];
       const currentStats = statsObj[s.id] || statsObj[s.entity_id] || {};
 
+      // --- 🔵 NOVÝ DIAGNOSTICKÝ VÝPIS TRANSFORMACE //##---
+      if (s.id === 'teplota_vnejsi') {
+        console.log("DIAGNOSTIKA KROK 4 (teplota_vnejsi):", {
+          pocet_bodu: points.length,
+          prvni_bod: points[0],
+          posledni_bod: points[points.length - 1],
+          aktualni_cas_systemu: Date.now(),
+          vsechny_body: points
+        });
+      }
+      
       const gt = (s.graph_type || '').toLowerCase();
       const isWindRose = gt === 'wind_rose' || gt === 'windrose' || s.id === 'vitr_smer';
 
