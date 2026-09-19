@@ -926,7 +926,7 @@ class PocasiMeteoCard extends HTMLElement {
       // Min / Avg / Max pro lineární grafy
       const minItem = makeItem('Min', s.stats_min, 'red');
       const maxItem = makeItem('Max', s.stats_max, 'green');
-      [minItem, avgItem, maxItem].forEach(it => { if (it) wrapper.appendChild(it); });
+      [minItem, maxItem].forEach(it => { if (it) wrapper.appendChild(it); });
     }
 
     return wrapper;
