@@ -652,37 +652,39 @@ class PocasiMeteoCard extends HTMLElement {
     const rawHistoryData = {};
 
     // --- KROK 1: ASYNCHRONNÍ STAŽENÍ HISTORIE NA POZADÍ (BEZ MAZÁNÍ HTML) ---
-    const historyPromises = sensorsMeta.map(async s => {
-      const sState = hass.states[s.entity_id];
-
-      console.log("DIAGNOSTIKA METEO STANICE:", s.id, "Going to try read data from HA"); //##
+    const historyPromises = sensorsMeta.map(async currentSensor => {
+      const currentSensorId = currentSensor.id;
+      const targetEntityId = currentSensor.entity_id;
       
+      const sState = hass.states[targetEntityId];
       if (!sState) return;
 
       try {
+        console.log(`DIAGNOSTIKA START: Pokus o načtení historie pro ${currentSensorId} (${targetEntityId})`);
+
         const history = await hass.callWS({
           type: "history/list",
           start_time: since,
           end_time: new Date().toISOString(),
-          entity_id: [s.entity_id],
+          entity_id: [targetEntityId],
           minimal_response: false,
           no_attributes: false
         });
 
-        console.log("DIAGNOSTIKA METEO STANICE:", s.id, "Syrová data z HA:", history); //##
+        // BEZPEČNÝ DIAGNOSTICKÝ VÝPIS: Vypíše přesný obsah, který se z databáze vrátil
+        console.log(`DIAGNOSTIKA VÝSTUP: Senzor: ${currentSensorId}, Data z Recorderu:`, history);
 
         if (history && history.length > 0) {
-          rawHistoryData[s.id] = Array.isArray(history[0]) ? history[0] : history;
+          rawHistoryData[currentSensorId] = history;
         } else {
-          rawHistoryData[s.id] = [];
+          rawHistoryData[currentSensorId] = [];
         }
       } catch (err) {
-        rawHistoryData[s.id] = [];
+        console.error(`DIAGNOSTIKA CHYBA: Načítání historie selhalo pro ${currentSensorId}:`, err);
+        rawHistoryData[currentSensorId] = [];
       }
     });
 
-    console.log("DIAGNOSTIKA METEO STANICE:", s.id, "Going to transform data from HA"); //##
-    
     await Promise.all(historyPromises);
 
     // --- KROK 2: DATOVÁ TRANSFORMACE DO PAMĚTI (Bod d) ---
