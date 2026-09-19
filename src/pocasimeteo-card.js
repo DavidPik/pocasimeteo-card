@@ -691,8 +691,6 @@ class PocasiMeteoCard extends HTMLElement {
       }
     }
 
-    await Promise.all(historyPromises);
-
     // --- KROK 3: TRANSFORMACE HISTORIE NA BODY S JEDNOBODOVÝM FALLBACKEM ---
     const pointsMap = {};
     Object.keys(rawHistoryData).forEach(sensorId => {
