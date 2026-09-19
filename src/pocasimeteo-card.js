@@ -671,7 +671,7 @@ class PocasiMeteoCard extends HTMLElement {
           type: "history/list",
           start_time: since,
           end_time: new Date().toISOString(),
-          entity_id: [entityId],
+          entity_id: entityId,
           minimal_response: false,
           no_attributes: false
         });
@@ -923,14 +923,13 @@ console.log('rendering', meta.id, 'points count', points.length, 'firstX', point
 
     if (isWindRose) {
       // AVG / MODE / VAR (pokud existují)
-      const avgItem = makeItem('AVG', s.stats_avg, '#ff0000');
-      const modeItem = makeItem('MODE', s.stats_mode, '#0000ff');
-      const varItem = makeItem('VAR', s.stats_var, 'rgba(255,165,0,0.85)');
+      const avgItem = makeItem('Avg', s.stats_avg, '#ff0000');
+      const modeItem = makeItem('Modus', s.stats_mode, '#0000ff');
+      const varItem = makeItem('Var', s.stats_var, 'rgba(255,165,0,0.85)');
       [avgItem, modeItem, varItem].forEach(it => { if (it) wrapper.appendChild(it); });
     } else {
       // Min / Avg / Max pro lineární grafy
       const minItem = makeItem('Min', s.stats_min, 'red');
-      const avgItem = makeItem('Avg', s.stats_avg, color);
       const maxItem = makeItem('Max', s.stats_max, 'green');
       [minItem, avgItem, maxItem].forEach(it => { if (it) wrapper.appendChild(it); });
     }
