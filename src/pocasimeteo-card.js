@@ -570,29 +570,79 @@ class PocasiMeteoCard extends HTMLElement {
     const secondaryGraphs = this.shadowRoot.getElementById('secondary-graphs');
 
     if (!primaryGraphs || !secondaryGraphs) return;
-
-    primaryGraphs.innerHTML = '';
-    secondaryGraphs.innerHTML = '';
+    if (this.config.show_graphs === false || sensorsMeta.length === 0) return;
 
     const graphsPerRow = Math.max(1, Number(this.config.graphs_per_row) || 2);
-    primaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
-    secondaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
-
-    if (this.config.show_graphs === false) return;
-    if (sensorsMeta.length === 0) return;
-
     const statsIntervalHours = typeof d.statistics_interval === 'number' ? d.statistics_interval : 24;
     const since = new Date(Date.now() - statsIntervalHours * 3600 * 1000).toISOString();
 
     const activeCanvases = {};
     const rawHistoryData = {};
 
+    // --- KROK 1: ASYNCHRONNÍ STAŽENÍ HISTORIE NA POZADÍ (BEZ MAZÁNÍ HTML) ---
+    const historyPromises = sensorsMeta.map(async s => {
+      const sState = hass.states[s.entity_id];
+      if (!sState) return;
+
+      try {
+        const history = await hass.callWS({
+          type: "history/list",
+          start_time: since,
+          end_time: new Date().toISOString(),
+          entity_id: [s.entity_id],
+          minimal_response: false,
+          no_attributes: false
+        });
+
+        if (history && history.length > 0) {
+          rawHistoryData[s.id] = Array.isArray(history[0]) ? history[0] : history;
+        } else {
+          rawHistoryData[s.id] = [];
+        }
+      } catch (err) {
+        rawHistoryData[s.id] = [];
+      }
+    });
+
+    await Promise.all(historyPromises);
+
+    // --- KROK 2: DATOVÁ TRANSFORMACE DO PAMĚTI (Bod d) ---
+    const pointsMap = {};
+    sensorsMeta.forEach(s => {
+      const raw = rawHistoryData[s.id] || [];
+      let pts = historyToPoints(raw);
+
+      if (pts.length === 0) {
+        const sState = hass.states[s.entity_id];
+        let fallbackVal = sState ? Number(sState.state) : NaN;
+        if (isNaN(fallbackVal)) {
+          if (s.id === 'teplota_vnejsi') fallbackVal = Number(d.temperature);
+          else if (s.id === 'vlhkost_vnejsi') fallbackVal = Number(d.humidity);
+          else if (s.id === 'tlak_relativni') fallbackVal = Number(d.pressure);
+          else if (s.id === 'vitr_rychlost') fallbackVal = Number(d.wind_speed);
+          else if (s.id === 'vitr_smer') fallbackVal = Number(d.wind_bearing);
+        }
+        if (!isNaN(fallbackVal)) {
+          const now = Date.now();
+          pts.push({ x: now - 60000, y: fallbackVal }, { x: now, y: fallbackVal });
+        }
+      } else if (pts.length === 1) {
+        pts.push({ x: Date.now(), y: pts[0].y });
+      }
+      pointsMap[s.id] = pts;
+    });
+
+    // --- KROK 3: TEPRVE TEĎ JEDNORÁZOVĚ VYMAŽEME A VYSTAVÍME DOM ---
+    primaryGraphs.innerHTML = '';
+    secondaryGraphs.innerHTML = '';
+    primaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
+    secondaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
+
     const targetSections = [
       { type: 'primary', container: primaryGraphs },
       { type: 'secondary', container: secondaryGraphs }
     ];
 
-    // --- KROK 1: PŘÍPRAVA CANVASŮ A REGISTRACE ENTIT ---
     targetSections.forEach(section => {
       const filteredMeta = sensorsMeta.filter(s => {
         const isCorrectType = s.type === section.type;
@@ -610,13 +660,10 @@ class PocasiMeteoCard extends HTMLElement {
 
         const unit = sState.attributes.unit_of_measurement || '';
         const rawFriendlyName = sState.attributes.friendly_name || s.id;
-
         const stationTitle = entity.attributes.friendly_name || '';
-        let cleanGraphName = rawFriendlyName;
-
-        if (stationTitle && rawFriendlyName.indexOf(stationTitle) === 0) {
-          cleanGraphName = rawFriendlyName.substring(stationTitle.length).trim();
-        }
+        let cleanGraphName = rawFriendlyName.indexOf(stationTitle) === 0 
+          ? rawFriendlyName.substring(stationTitle.length).trim() 
+          : rawFriendlyName;
 
         if (cleanGraphName.length > 0) {
           cleanGraphName = cleanGraphName.charAt(0).toUpperCase() + cleanGraphName.slice(1);
@@ -629,123 +676,43 @@ class PocasiMeteoCard extends HTMLElement {
         const canvas = document.createElement('canvas');
         canvas.className = 'pm-graph';
         canvas.id = `pm-graph-${s.id}`;
-        // zajistit, že canvas má CSS rozměry
         canvas.style.width = '100%';
         canvas.style.height = '100%';
 
-        // vytvoříme wrapper pro canvas (chartWrapper) a nastavíme výšku
         const chartWrapper = document.createElement('div');
         chartWrapper.style.position = 'relative';
         chartWrapper.style.width = '100%';
         chartWrapper.style.height = s.id === 'vitr_smer' ? '260px' : '180px';
 
-        // vložíme canvas do wrapperu a wrapper do tile
         chartWrapper.appendChild(canvas);
         tile.appendChild(titleElement);
         tile.appendChild(chartWrapper);
 
-        // chartWrapper a canvas už byly vloženy do tile výše
-        section.container.appendChild(tile);
-
-        // nyní, když je chartWrapper v DOM, nastavíme interní pixelové rozlišení canvasu
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor((chartWrapper.clientWidth || canvas.clientWidth || 300) * dpr);
-        canvas.height = Math.floor((chartWrapper.clientHeight || canvas.clientHeight || 180) * dpr);
-
-        // vytvořit legendu statistik (pokud s bude dostupné později, aktualizujeme ji při renderu)
-        // barvu vezmeme z meta.graph_color pokud existuje, jinak default
         const legendPlaceholder = document.createElement('div');
         legendPlaceholder.className = 'pm-stats-placeholder';
         legendPlaceholder.style.minHeight = '22px';
         tile.appendChild(legendPlaceholder);
 
-        activeCanvases[s.id] = {
-          canvas,
-          meta: s,
-          cleanName: cleanGraphName,
-          unit,
-          legendPlaceholder
-        };
-      });
-    });
+        section.container.appendChild(tile);
 
-    // --- KROK 2: JEDINÝ HROMADNÝ FUNKČNÍ WEBSOCKET DOTAZ DO RECORDERU ---
-    // Sesbíráme pole reálných entity_id ze všech aktivních canvasů
-    const activeEntityIds = Object.values(activeCanvases).map(entry => entry.meta.entity_id);
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.floor((chartWrapper.clientWidth || 300) * dpr);
+        canvas.height = Math.floor((chartWrapper.clientHeight || 180) * dpr);
 
-    if (activeEntityIds.length > 0) {
-      try {
-        const resp = await hass.callWS({
-          type: "history/history_during_period",
-          start_time: since,
-          end_time: new Date().toISOString(),
-          entity_ids: activeEntityIds,
-          minimal_response: false,
-          significant_changes_only: false,
-          no_attributes: true
-        });
+        // --- KROK 4: OKAMŽITÉ PASIVNÍ VYKRESLENÍ Z PAMĚTI ---
+        const points = pointsMap[s.id] || [];
+        const currentStats = statsObj[s.id] || statsObj[s.entity_id] || {};
+        const theme = computeTheme(this);
 
-        // Správné rozřazení: history_during_period vrací objekt, kde klíče jsou entity_id
-        Object.values(activeCanvases).forEach(entry => {
-          const entityId = entry.meta.entity_id;
-          rawHistoryData[entry.meta.id] = (resp && resp[entityId]) ? resp[entityId] : [];
-        });
-      } catch (e) {
-        console.error("Hromadný dotaz do Recorderu selhal, zkouším prázdné sady:", e);
-        Object.values(activeCanvases).forEach(entry => {
-          rawHistoryData[entry.meta.id] = [];
-        });
-      }
-    }
+        const gt = (s.graph_type || '').toLowerCase();
+        const isWindRose = gt === 'wind_rose' || gt === 'windrose' || s.id === 'vitr_smer';
 
-    // --- KROK 3: TRANSFORMACE HISTORIE NA BODY S JEDNOBODOVÝM FALLBACKEM ---
-    const pointsMap = {};
-    Object.keys(rawHistoryData).forEach(sensorId => {
-      const raw = rawHistoryData[sensorId] || [];
-      const pts = historyToPoints(raw);
-
-      // --- ZDE JE HLAVNÍ OPRAVA PRO BOD V GRAFU ---
-      // Pokud v databázi ještě nejsou body (nový senzor), vytvoříme čáru z aktuálního živého stavu v HA
-      if (pts.length === 0) {
-        const domItem = activeCanvases[sensorId];
-        if (domItem) {
-          const sState = hass.states[domItem.meta.entity_id];
-          const val = sState ? Number(sState.state) : NaN;
-          if (!isNaN(val)) {
-            const now = Date.now();
-            pts.push({ x: now - 60000, y: val }, { x: now, y: val });
-          }
+        if (isWindRose) {
+          this._renderWindRose(canvas, points, theme, currentStats, legendPlaceholder);
+        } else {
+          this._renderLineChart(canvas, points, cleanGraphName, theme, currentStats, statsIntervalHours, legendPlaceholder);
         }
-      } else if (pts.length === 1) {
-        // Oprava jednobodové historie: duplikujeme bod do aktuálního času, aby Chart.js mohl vykreslit čáru
-        pts.push({ x: Date.now(), y: pts[0].y });
-      }
-
-      pointsMap[sensorId] = pts;
-    });
-
-    // --- KROK 4: VYKRESLENÍ GRAFŮ ---
-    const theme = computeTheme(this);
-
-    Object.values(activeCanvases).forEach(entry => {
-      const { canvas, meta, cleanName } = entry;
-      const points = pointsMap[meta.id] || [];
-
-      // POUZE čteme statistiky z backendu; žádné doplňování ani přepisování
-      const s = statsObj[meta.id] || statsObj[meta.entity_id] || {};
-
-      const gt = (meta.graph_type || '').toLowerCase();
-      const isWindRose =
-        gt === 'wind_rose' ||
-        gt === 'windrose' ||
-        meta.id === 'vitr_smer' || meta.id === 'wind_direction';
-
-      // předáme i legendPlaceholder, který jsme uložili v activeCanvases
-      if (isWindRose) {
-        this._renderWindRose(canvas, points, theme, s, activeCanvases[meta.id].legendPlaceholder);
-      } else {
-        this._renderLineChart(canvas, points, cleanName, theme, s, statsIntervalHours, activeCanvases[meta.id].legendPlaceholder);
-      }
+      });
     });
   }
 
