@@ -959,13 +959,6 @@ class PocasiMeteoCard extends HTMLElement {
     const chart = new Chart(canvas.getContext('2d'), cfg);
     this._charts[canvas.id] = chart;
 
-     requestAnimationFrame(() => { 
-      try { 
-        chart.resize(); 
-        chart.update('none'); // 👍 Vynutí bezpečné vykreslení křivek bez animace
-      } catch(e){} 
-    });
-
     // doplnit legendu statistik: pro lineární grafy chceme jen Min/Max
     if (legendPlaceholder) {
       legendPlaceholder.innerHTML = '';
@@ -1237,12 +1230,6 @@ class PocasiMeteoCard extends HTMLElement {
     console.error('WindRose Chart init failed for', cid, e);
     return;
   }
-
-  // Po vložení do DOM zajistit korektní resize a redraw
-  requestAnimationFrame(() => {
-    try { chart.resize(); } catch (e) { console.warn('chart.resize failed', e); }
-    try { chart.render(); } catch (e) { /* render může být volán pluginem */ }
-  });
 
   // Doplňování legendy statistik do placeholderu (AVG / MODE / VAR)
   if (legendPlaceholder) {
