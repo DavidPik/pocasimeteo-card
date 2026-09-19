@@ -102,24 +102,23 @@ function buildWindRose(points) {
 function historyToPoints(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.map(p => {
-    const rawTs = p.lc || p.lu || p.last_changed || p.last_updated;
+    // Podpora pro zkrácené i plné klíče z HA Recorderu
+    const rawTs = p.lu !== undefined ? p.lu : (p.lc !== undefined ? p.lc : (p.last_changed || p.last_updated));
     const rawState = p.s !== undefined ? p.s : p.state;
 
-    if (!rawTs || rawState === undefined) return null;
+    if (rawTs === undefined || rawState === undefined) return null;
 
-    // Robustní převod času, který bezpečně zvládne ISO formáty s časovou zónou z HA Recorderu
     let ts = NaN;
+    // Pokud je čas Unix timestamp (v sekundách), vynásobíme 1000 pro JavaScript milisekundy
     if (typeof rawTs === 'number') {
-      ts = rawTs > 1e12 ? rawTs : rawTs * 1000;
+      ts = rawTs > 1e12 ? rawTs : Math.round(rawTs * 1000);
     } else if (rawTs) {
       const parsedDate = new Date(rawTs);
       ts = parsedDate.getTime();
     }
     
     const val = Number(rawState);
-
     if (isNaN(ts) || isNaN(val)) return null;
-
     return { x: ts, y: val };
   }).filter(p => p && !isNaN(p.x) && !isNaN(p.y));
 }
@@ -662,7 +661,7 @@ class PocasiMeteoCard extends HTMLElement {
           start_time: since,
           end_time: new Date().toISOString(),
           entity_ids: activeEntityIds,
-          minimal_response: false,
+          minimal_response: true,
           significant_changes_only: false,
           no_attributes: false
         });
