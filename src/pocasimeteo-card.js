@@ -257,16 +257,23 @@ class PocasiMeteoCard extends HTMLElement {
 
     // 5) Záhlaví je nyní viditelné
 
-    // 6–10) Vykreslení grafů
+    // 6) Vykreslení grafů se stavovým zámkem proti zacyklení
+    if (this._fetchingHistory) {
+      return;
+    }
+
     if (!this._rendering) {
       this._rendering = true;
+      this._fetchingHistory = true; // Uzamkneme kartu pro asynchronní operaci Recorderu
+
       setTimeout(() => {
         this._updateCharts(hass, entity).finally(() => {
           this._rendering = false;
+          this._fetchingHistory = false; // Zámek uvolníme až po kompletním dokončení renderu Chart.js
         });
       }, 50);
     }
-  }
+  } // <-- Konec metody set hass(hass)
 
   /**
    * Vytvoří strukturu záhlaví (bez dat).
