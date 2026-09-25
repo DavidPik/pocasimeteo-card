@@ -746,13 +746,15 @@ class PocasiMeteoCard extends HTMLElement {
       }
       domItem.titleElement.textContent = cleanGraphName + (unit ? ` (${unit})` : '');
 
-      // Nastavení rozlišení plátna podle aktuálního okna
+      // Nastavení rozlišení plátna podle aktuálního okna s dynamickým fallbackem pro růžici
       const dpr = window.devicePixelRatio || 1;
       const canvas = domItem.canvas;
       const chartWrapper = canvas.parentElement;
-      const targetHeight = s.id === 'vitr_smer' ? 260 : 180; // Dynamický fallback podle typu grafu
-      canvas.width = Math.floor((chartWrapper.clientWidth || 300) * dpr);
-      canvas.height = Math.floor((chartWrapper.clientHeight || targetHeight) * dpr);
+      if (chartWrapper) {
+        const fallbackHeight = s.id === 'vitr_smer' ? 260 : 180;
+        canvas.width = Math.floor((chartWrapper.clientWidth || 300) * dpr);
+        canvas.height = Math.floor((chartWrapper.clientHeight || fallbackHeight) * dpr);
+      }
 
       // Vlastní vykreslení
       const points = pointsMap[s.id] || [];
@@ -978,19 +980,19 @@ class PocasiMeteoCard extends HTMLElement {
   _renderLineChart(canvas, points, cleanName, theme, s, statsIntervalHours, legendPlaceholder) {
     const cid = canvas.id;
 
-    // --- BEZPEČNÁ DESTRUKCE STARÉ INSTANCE PODLE ID CANVASU ---
-    if (!this._charts) this._charts = {};
-    if (this._charts[cid]) {
+    // Bezpečné zničení předchozí běžící instance Chart.js podle správného ID canvasu
+    const targetCanvasId = `pm-graph-${s.id}`;
+    if (this._charts[targetCanvasId]) {
       try {
-        this._charts[cid].destroy();
-        this._charts[cid] = null;
+        this._charts[targetCanvasId].destroy();
+        this._charts[targetCanvasId] = null;
       } catch (e) {
-        console.warn('Failed to destroy line chart:', cid, e);
+        console.warn("Chyba při destrukci grafu:", e);
       }
     }
 
-    // Sestavení čisté, plnohodnotné konfigurace liniového grafu s typy datasets
-    const cfg = createLineChartConfig(points, cleanName, theme, s, statsIntervalHours);
+    // Sestavení čisté, plnohodnotné konfigurace liniového grafu s opraveným voláním interní metody
+    const cfg = this._createLineChartConfig(points, cleanName, theme, s, statsIntervalHours);
 
     try {
       const chart = new Chart(canvas.getContext('2d'), cfg);
