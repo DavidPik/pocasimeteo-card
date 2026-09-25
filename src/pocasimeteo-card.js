@@ -979,27 +979,34 @@ class PocasiMeteoCard extends HTMLElement {
    */
   _renderLineChart(canvas, points, cleanName, theme, s, statsIntervalHours, legendPlaceholder) {
     const cid = canvas.id;
-
-    // Bezpečné zničení předchozí běžící instance Chart.js podle správného ID canvasu
-    const targetCanvasId = `pm-graph-${s.id}`;
-    if (this._charts[targetCanvasId]) {
-      try {
-        this._charts[targetCanvasId].destroy();
-        this._charts[targetCanvasId] = null;
-      } catch (e) {
-        console.warn("Chyba při destrukci grafu:", e);
-      }
-    }
-
-    // Sestavení čisté, plnohodnotné konfigurace liniového grafu s opraveným voláním interní metody
+    
+    // Vytvoříme konfigurační objekt s čerstvými daty z interní metody
     const cfg = this._createLineChartConfig(points, cleanName, theme, s, statsIntervalHours);
 
-    try {
-      const chart = new Chart(canvas.getContext('2d'), cfg);
-      this._charts[cid] = chart;
-    } catch (e) {
-      console.error('Line Chart init failed for', cid, e);
-      return;
+    // 👍 ČISTÁ VARIANTA A: Pokud graf už existuje, pouze v něm změníme datasety a osy!
+    if (this._charts && this._charts[cid]) {
+      try {
+        const existingChart = this._charts[cid];
+        existingChart.data.datasets = cfg.data.datasets;
+        existingChart.options.scales.x.min = cfg.options.scales.x.min;
+        existingChart.options.scales.x.max = cfg.options.scales.x.max;
+        existingChart.options.scales.y.min = cfg.options.scales.y.min;
+        existingChart.options.scales.y.max = cfg.options.scales.y.max;
+        
+        existingChart.update('none'); // Update proběhne okamžitě bez překreslování dlaždic
+      } catch (err) {
+        console.warn('Failed passive chart update, recreating:', cid, err);
+      }
+    } else {
+      // Pokud graf na canvasu ještě nebyl vytvořen, provedeme prvotní zrod
+      if (!this._charts) this._charts = {};
+      try {
+        const chart = new Chart(canvas.getContext('2d'), cfg);
+        this._charts[cid] = chart;
+      } catch (e) {
+        console.error('Line Chart init failed for', cid, e);
+        return;
+      }
     }
 
     // Vygenerování statistické legendy pod grafem (Min / Max)
@@ -1250,47 +1257,48 @@ class PocasiMeteoCard extends HTMLElement {
    */
   _renderWindRose(canvas, points, theme, s, legendPlaceholder) {
     const cid = canvas.id;
-
-    // --- BEZPEČNÁ DESTRUKCE STARÉ INSTANCE PODLE ID CANVASU ---
-    if (!this._charts) this._charts = {};
-    if (this._charts[cid]) {
-      try {
-        this._charts[cid].destroy();
-        this._charts[cid] = null;
-      } catch (e) {
-        console.warn('Failed to destroy windrose chart:', cid, e);
-      }
-    }
-
     const bins = buildWindRose(points);
 
-    const cfg = {
-      type: 'polarArea',
-      data: {
-        labels: WIND_DIR_LABELS,
-        datasets: [{
-          data: bins,
-          backgroundColor: 'transparent',
-          borderColor: 'transparent',
-          borderWidth: 1
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } },
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        scales: { r: { display: false } }
-      },
-      plugins: [ createWindRosePlugin(theme, points, s) ]
-    };
+    // Pokud graf už na canvasu existuje, pouze pasivně přepíšeme data datasetu (Čistá Varianta A)
+    if (this._charts && this._charts[cid]) {
+      const existingChart = this._charts[cid];
+      existingChart.data.datasets[0].data = bins;
+      
+      // Aktualizujeme parametry v našem interním canvas pluginu větrné růžice přes this.
+      existingChart.config.plugins = [ this._createWindRosePlugin(theme, points, s) ];
+      
+      existingChart.update('none');
+    } else {
+      // Pokud graf ještě neexistuje (First Render), postavíme novou instanci
+      const cfg = {
+        type: 'polarArea',
+        data: {
+          labels: WIND_DIR_LABELS,
+          datasets: [{
+            data: bins,
+            backgroundColor: 'transparent',
+            borderColor: 'transparent',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } },
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          scales: { r: { display: false } }
+        },
+        plugins: [ this._createWindRosePlugin(theme, points, s) ] // 👍 OPRAVENO: Přidáno this.
+      };
 
-    try {
-      const chart = new Chart(canvas.getContext('2d'), cfg);
-      this._charts[cid] = chart;
-    } catch (e) {
-      console.error('WindRose Chart init failed for', cid, e);
-      return;
+      if (!this._charts) this._charts = {};
+      try {
+        const chart = new Chart(canvas.getContext('2d'), cfg);
+        this._charts[cid] = chart;
+      } catch (e) {
+        console.error('WindRose Chart init failed for', cid, e);
+        return;
+      }
     }
 
     // Vygenerování statistické legendy pro větrnou růžici (AVG / MODE / VAR)
