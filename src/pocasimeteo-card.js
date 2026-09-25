@@ -771,6 +771,17 @@ class PocasiMeteoCard extends HTMLElement {
         });
       }
       
+      // --- OBNOVENÝ A OPRAVENÝ DESTRUKČNÍ MECHANISMUS PODLE ID CANVASU ---
+      const targetCanvasId = `pm-graph-${s.id}`;
+      if (this._charts && this._charts[targetCanvasId]) {
+        try {
+          this._charts[targetCanvasId].destroy();
+          this._charts[targetCanvasId] = null;
+        } catch (e) {
+          console.warn('Failed to destroy chart instance before recreate:', targetCanvasId, e);
+        }
+      }
+
       const gt = (s.graph_type || '').toLowerCase();
       const isWindRose = gt === 'wind_rose' || gt === 'windrose' || s.id === 'vitr_smer';
 
@@ -979,34 +990,17 @@ class PocasiMeteoCard extends HTMLElement {
    */
   _renderLineChart(canvas, points, cleanName, theme, s, statsIntervalHours, legendPlaceholder) {
     const cid = canvas.id;
-    
-    // Vytvoříme konfigurační objekt s čerstvými daty z interní metody
+
+    // Sestavení konfigurace z interní metody třídy
     const cfg = this._createLineChartConfig(points, cleanName, theme, s, statsIntervalHours);
 
-    // 👍 ČISTÁ VARIANTA A: Pokud graf už existuje, pouze v něm změníme datasety a osy!
-    if (this._charts && this._charts[cid]) {
-      try {
-        const existingChart = this._charts[cid];
-        existingChart.data.datasets = cfg.data.datasets;
-        existingChart.options.scales.x.min = cfg.options.scales.x.min;
-        existingChart.options.scales.x.max = cfg.options.scales.x.max;
-        existingChart.options.scales.y.min = cfg.options.scales.y.min;
-        existingChart.options.scales.y.max = cfg.options.scales.y.max;
-        
-        existingChart.update('none'); // Update proběhne okamžitě bez překreslování dlaždic
-      } catch (err) {
-        console.warn('Failed passive chart update, recreating:', cid, err);
-      }
-    } else {
-      // Pokud graf na canvasu ještě nebyl vytvořen, provedeme prvotní zrod
+    try {
+      const chart = new Chart(canvas.getContext('2d'), cfg);
       if (!this._charts) this._charts = {};
-      try {
-        const chart = new Chart(canvas.getContext('2d'), cfg);
-        this._charts[cid] = chart;
-      } catch (e) {
-        console.error('Line Chart init failed for', cid, e);
-        return;
-      }
+      this._charts[cid] = chart;
+    } catch (e) {
+      console.error('Line Chart init failed for', cid, e);
+      return;
     }
 
     // Vygenerování statistické legendy pod grafem (Min / Max)
