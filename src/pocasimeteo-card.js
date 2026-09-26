@@ -495,6 +495,11 @@ class PocasiMeteoCard extends HTMLElement {
       card.appendChild(secondarySec);
     }
 
+    // Okamžité nastavení geometrie hned při startu podle konfigurace (prevence 4 dlaždic v řadě)
+    const graphsPerRow = Math.max(1, Number(this.config?.graphs_per_row) || 2);
+    primaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
+    secondaryGraphs.style.setProperty('--graphs-per-row', graphsPerRow);
+
     this._activeCanvases = {};
 
     const sensorDefinitions = [
@@ -539,7 +544,7 @@ class PocasiMeteoCard extends HTMLElement {
       tile.appendChild(chartWrapper);
 
       const legendPlaceholder = document.createElement('div');
-      legendPlaceholder.className = 'pm-stats-placeholder';
+      legendPlaceholder.className = 'pm-legend';
       legendPlaceholder.style.minHeight = '22px';
       tile.appendChild(legendPlaceholder);
 
@@ -802,9 +807,9 @@ class PocasiMeteoCard extends HTMLElement {
       const isWindRose = gt === 'wind_rose' || gt === 'windrose' || s.id === 'vitr_smer';
 
       if (isWindRose) {
-        this._renderWindRose(canvas, points, theme, currentStats, domItem.legendPlaceholder);
+        this._renderWindRose(canvas, points, theme, s, domItem.legendPlaceholder);
       } else {
-        this._renderLineChart(canvas, points, cleanGraphName, theme, currentStats, statsIntervalHours, domItem.legendPlaceholder);
+        this._renderLineChart(canvas, points, cleanGraphName, theme, s, statsIntervalHours, domItem.legendPlaceholder);
       }
     });
   }
@@ -1148,7 +1153,7 @@ class PocasiMeteoCard extends HTMLElement {
         });
 
         // Sektory růžice
-        const sectorColor = '#009688';
+        const sectorColor = sensorAttrs.graph_color || '#009688';
 
         for (let i = 0; i < 16; i++) {
           const binValue = bins[i];
