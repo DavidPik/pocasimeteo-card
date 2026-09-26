@@ -672,9 +672,9 @@ class PocasiMeteoCard extends HTMLElement {
           start_time: since,
           end_time: new Date().toISOString(),
           entity_ids: activeEntityIds,
-          minimal_response: true,
+          minimal_response: true, //## vyzkoušet s hodnotou false? 
           significant_changes_only: false,
-          no_attributes: false
+          no_attributes: true
         });
 
         // Home Assistant vrátí objekt, kde klíče jsou entity_id. Rozřadíme je do rawHistoryData pod ID senzoru:
@@ -718,11 +718,17 @@ class PocasiMeteoCard extends HTMLElement {
           pts.push({ x: cutoffTime, y: fallbackVal }, { x: endTimeX, y: fallbackVal });
         }
       } else {
-        // Pojistka pro protažení linií: Pokud první/poslední bod nedobíhá k okrajům osy X, protáhneme ho
-        if (pts[0].x > cutoffTime + 5 * 60 * 1000) {
-          pts.unshift({ x: cutoffTime, y: pts[0].y });
+        // VYUŽITÍ NATIVNÍHO BODU Z HA: Pokud první bod chybí nebo je od okraje osy dál než 1 minutu,
+        // zasáhne pojistka (např. pro nově přidané senzory, které před 24h ještě neexistovaly).
+        if (pts[0].x > cutoffTime + 60000) {
+          // Pouze v tomto nouzovém případě aplikujeme bezpečný fallback
+          const startY = (s.id === 'vitr_rychlost' || s.id === 'vitr_narazy') ? 0 : pts[0].y;
+          pts.unshift({ x: cutoffTime, y: startY });
         }
-        if (pts[pts.length - 1].x < endTimeX - 5 * 60 * 1000) {
+        
+        // Konec osy: Pokud poslední měření skončilo dříve (např. výpadek spojení se stanicí),
+        // protáhneme poslední známý stav do aktuálního času, aby graf nekončil předčasně.
+        if (pts[pts.length - 1].x < endTimeX - 60000) {
           pts.push({ x: endTimeX, y: pts[pts.length - 1].y });
         }
       }
@@ -855,16 +861,17 @@ class PocasiMeteoCard extends HTMLElement {
       data: {
         datasets: [
           {
-            type: 'line',         // 👍 Vynutí typ čárového grafu pro tento dataset
+            type: 'line',
             label: cleanName,
             data: [...points],
             borderColor: color,
             backgroundColor: rgba,
-            tension: isStepped ? 0 : 0.3,
+            tension: isStepped ? 0 : 0.4,
+            cubicInterpolationMode: isStepped ? undefined : 'monotone', // Eliminuje falešné špičky a smyčky
             stepped: isStepped ? true : false,
             pointRadius: 0,
             borderWidth: 2,
-            showLine: true        // 👍 Explicitně povolí vykreslení spojité křivky
+            showLine: true
           },
           {
             label: 'Min: ' + min.toFixed(1),
