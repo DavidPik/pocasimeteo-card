@@ -861,7 +861,7 @@ class PocasiMeteoCard extends HTMLElement {
             borderColor: color,
             backgroundColor: rgba,
             tension: isStepped ? 0 : 0.3,
-            stepped: isStepped,
+            stepped: isStepped ? true : false,
             pointRadius: 0,
             borderWidth: 2,
             showLine: true        // 👍 Explicitně povolí vykreslení spojité křivky
@@ -1339,7 +1339,7 @@ class PocasiMeteoCard extends HTMLElement {
         const labelsData = [
           { color: '#ff0000', text: 'Průměr: ' + avgVal.toFixed(0) + '° (' + degToDirection(avgVal) + ')' },
           { color: '#0000ff', text: 'Mod: ' + modeVal.toFixed(0) + '° (' + degToDirection(modeVal) + ')' },
-          { color: '#ffa500', text: 'Rozptyl: ±' + varVal.toFixed(0) + '°' }
+          { color: 'rgba(255,165,0,0.85)', text: 'Rozptyl: ±' + varVal.toFixed(0) + '°' }
         ];
 
         labelsData.forEach(lbl => {
