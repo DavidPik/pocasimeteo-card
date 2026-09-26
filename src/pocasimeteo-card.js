@@ -395,14 +395,17 @@ class PocasiMeteoCard extends HTMLElement {
       }
 
       .pm-legend {
-        margin-top: 0px;
+        margin-top: 4px;
         display: flex;
-        flex-wrap: wrap;
+        flex-direction: row;
+        flex-wrap: nowrap;
         justify-content: center;
-        gap: 8px;
-        font-size: 14px;
-        opacity: 0.8;
-        padding: 4px;
+        align-items: center;
+        gap: 16px;
+        font-size: 13px;
+        opacity: 0.85;
+        width: 100%;
+        text-align: center;
       }
 
       .pm-legend-item {
@@ -695,6 +698,7 @@ class PocasiMeteoCard extends HTMLElement {
       // Transformujeme na souřadnice a odfiltrujeme body starší než 24 hodin
       let pts = historyToPoints(raw).filter(p => p.x >= cutoffTime);
 
+      const endTimeX = Date.now();
       if (pts.length === 0) {
         const sState = hass.states[s.entity_id];
         let fallbackVal = sState ? Number(sState.state) : NaN;
@@ -706,11 +710,16 @@ class PocasiMeteoCard extends HTMLElement {
           else if (s.id === 'vitr_smer') fallbackVal = Number(d.wind_bearing);
         }
         if (!isNaN(fallbackVal)) {
-          const now = Date.now();
-          pts.push({ x: now - 60000, y: fallbackVal }, { x: now, y: fallbackVal });
+          pts.push({ x: cutoffTime, y: fallbackVal }, { x: endTimeX, y: fallbackVal });
         }
-      } else if (pts.length === 1) {
-        pts.push({ x: Date.now(), y: pts[0].y });
+      } else {
+        // Pojistka pro protažení linií: Pokud první/poslední bod nedobíhá k okrajům osy X, protáhneme ho
+        if (pts[0].x > cutoffTime + 5 * 60 * 1000) {
+          pts.unshift({ x: cutoffTime, y: pts[0].y });
+        }
+        if (pts[pts.length - 1].x < endTimeX - 5 * 60 * 1000) {
+          pts.push({ x: endTimeX, y: pts[pts.length - 1].y });
+        }
       }
       pointsMap[s.id] = pts;
     });
@@ -759,6 +768,13 @@ class PocasiMeteoCard extends HTMLElement {
       // Vlastní vykreslení
       const points = pointsMap[s.id] || [];
       const currentStats = statsObj[s.id] || statsObj[s.entity_id] || {};
+
+      // Bezpečné přibálení spočítaných statistik přímo do objektu senzoru
+      s.stats_min = currentStats.stats_min;
+      s.stats_max = currentStats.stats_max;
+      s.stats_avg = currentStats.stats_avg;
+      s.stats_mode = currentStats.stats_mode;
+      s.stats_var = currentStats.stats_var;
 
       // --- 🔵 NOVÝ DIAGNOSTICKÝ VÝPIS TRANSFORMACE //##---
       if (s.id === 'teplota_vnejsi') {
