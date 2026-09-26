@@ -846,18 +846,20 @@ class PocasiMeteoCard extends HTMLElement {
             showLine: true        // 👍 Explicitně povolí vykreslení spojité křivky
           },
           {
-            type: 'scatter',      // 👍 Izoluje minimum jako nezávislý bodový prvek
             label: 'Min: ' + min.toFixed(1),
             data: minPoint ? [{ x: minPoint.x, y: minPoint.y }] : [],
             pointRadius: 6,
-            pointBackgroundColor: 'red'
+            pointBackgroundColor: 'red',
+            showLine: false, // 👍 Nativně skryje spojovací čáru, vykreslí se jen izolovaný bod
+            fill: false
           },
           {
-            type: 'scatter',      // 👍 Izoluje maximum jako nezávislý bodový prvek
             label: 'Max: ' + max.toFixed(1),
             data: maxPoint ? [{ x: maxPoint.x, y: maxPoint.y }] : [],
             pointRadius: 6,
-            pointBackgroundColor: 'green'
+            pointBackgroundColor: 'green',
+            showLine: false, // 👍 Nativně skryje spojovací čáru, vykreslí se jen izolovaný bod
+            fill: false
           }
         ]
       },
@@ -991,6 +993,16 @@ class PocasiMeteoCard extends HTMLElement {
   _renderLineChart(canvas, points, cleanName, theme, s, statsIntervalHours, legendPlaceholder) {
     const cid = canvas.id;
 
+    // OPRAVENO: Bezpečné zničení minulé instance běžící na tomto konkrétním plátně před vytvořením nové
+    if (this._charts && this._charts[cid]) {
+      try {
+        this._charts[cid].destroy();
+        this._charts[cid] = null;
+      } catch (e) {
+        console.warn('Failed to destroy previous line chart:', cid, e);
+      }
+    }
+    
     // Sestavení konfigurace z interní metody třídy
     const cfg = this._createLineChartConfig(points, cleanName, theme, s, statsIntervalHours);
 
