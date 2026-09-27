@@ -172,6 +172,22 @@ class PocasiMeteoCard extends HTMLElement {
     this._headerDetails = null;
   }
 
+  // Pomocí této metody Home Assistant pozná, jaký vizuální editor má kartě přiřadit
+  static getConfigElement() {
+    return document.createElement("pocasimeteo-card-editor");
+  }
+
+  // Výchozí konfigurace, která se vyplní při prvním vložení prázdné karty do dashboardu
+  static getStubConfig() {
+    return {
+      entity: "weather.gar632",
+      graphs_per_row: 2,
+      show_header: true,
+      show_graphs: true,
+      show_sensors: []
+    };
+  }
+  
   /**
    * Uložení konfigurace Lovelace panelu.
    * Tato metoda se může, ale nemusí volat — panel /pocasi-meteo/0 ji typicky nevolá.
@@ -182,7 +198,7 @@ class PocasiMeteoCard extends HTMLElement {
       graphs_per_row: config.graphs_per_row || 2,
       show_header: config.show_header !== false,
       show_graphs: config.show_graphs !== false,
-      hide_sensors: Array.isArray(config.hide_sensors) ? config.hide_sensors : [],
+      show_sensors: Array.isArray(config.show_sensors) ? config.show_sensors : [],
       debug: config.debug === true
     };
   }
@@ -794,7 +810,7 @@ class PocasiMeteoCard extends HTMLElement {
       const sState = hass.states[s.entity_id];
       
       // Pokud uživatel skryl senzor v konfiguraci, dlaždici zneviditelníme bez destrukce DOMu
-      const isVisible = s.visible !== false && (!Array.isArray(this.config.hide_sensors) || !this.config.hide_sensors.includes(s.id));
+      const isVisible = s.visible !== false && (this.config.show_sensors.length === 0 || this.config.show_sensors.includes(s.id));
       domItem.tile.style.display = isVisible ? 'flex' : 'none';
       if (!isVisible || !sState) return;
 
@@ -1403,4 +1419,128 @@ class PocasiMeteoCard extends HTMLElement {
 }
 
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
+
+/**
+ * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU
+ * Generuje klikací formulář v UI rozhraní Home Assistenta.
+ */
+class PocasiMeteoCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+  }
+
+  setConfig(config) {
+    this._config = config;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  // Hromadný seznam všech dostupných ID senzorů pro zaškrtávací políčka
+  get _allSensors() {
+    return [
+      'teplota_vnejsi', 'vlhkost_vnejsi', 'tlak_relativni', 'srazky_intenzita',
+      'vitr_rychlost', 'vitr_narazy', 'vitr_smer', 'slunecni_zareni', 'uv_index',
+      'teplota_vnitrni', 'vlhkost_vnitrni'
+    ];
+  }
+
+  _render() {
+    if (!this._hass || !this._config) return;
+
+    // Vyfiltrujeme pouze entity typu 'weather' pro rozbalovací seznam
+    const weatherEntities = Object.keys(this._hass.states).filter(id => id.startsWith('weather.'));
+    const currentShowSensors = this._config.show_sensors || [];
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        .pm-editor-form { display: flex; flex-direction: column; gap: 16px; font-family: sans-serif; color: var(--primary-text-color, #fff); }
+        .pm-editor-row { display: flex; flex-direction: column; gap: 6px; }
+        .pm-editor-row label { font-size: 14px; font-weight: 600; }
+        .pm-editor-row select, .pm-editor-row input[type="number"] { 
+          padding: 8px; border-radius: 4px; border: 1px solid var(--divider-color, #rgba(255,255,255,0.2));
+          background: var(--card-background-color, #2c2c2c); color: var(--primary-text-color, #fff);
+        }
+        .pm-editor-switch { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; }
+        .pm-editor-checkbox-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 4px; }
+      </style>
+
+      <div class="pm-editor-form">
+        <!-- 1) Výběr Weather Entity -->
+        <div class="pm-editor-row">
+          <label>Meteostanice (Weather entita):</label>
+          
+            ${weatherEntities.map(ent => `\){ent}</option>`).join('')}
+          </select>
+        </div>
+
+        <!-- 2) Počet grafů v řadě -->
+        <div class="pm-editor-row">
+          <label>Počet grafů v řadě:</label>
+          <input type="number" id="graphs_per_row" min="1" max="4" value="${this._config.graphs_per_row || 2}">
+        </div>
+
+        <!-- 3) Přepínače Záhlaví a Grafů -->
+        <label class="pm-editor-switch">
+          <input type="checkbox" id="show_header" ${this._config.show_header !== false ? 'checked' : ''}>
+          Zobrazit záhlaví stanice (Header)
+        </label>
+
+        <label class="pm-editor-switch">
+          <input type="checkbox" id="show_graphs" ${this._config.show_graphs !== false ? 'checked' : ''}>
+          Zobrazit sekce s grafy
+        </label>
+
+        <!-- 4) Výběr aktivních senzorů (show_sensors) -->
+        <div class="pm-editor-row">
+          <label>Zobrazit vybrané grafy senzorů (pokud není vybrán žádný, zobrazí se všechny):</label>
+          <div class="pm-editor-checkbox-grid">
+            ${this._allSensors.map(sensorId => `
+              <label class="pm-editor-switch">
+                <input type="checkbox" class="sensor-checkbox" value="\${sensorId}" \({currentShowSensors.includes(sensorId) ? 'checked' : ''}>\){sensorId.replace('_', ' ').toUpperCase()}
+              </label>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Navázání eventů pro zachycení kliknutí a okamžitý zápis do Lovelace konfigurace
+    this.shadowRoot.getElementById('entity').addEventListener('change', (ev) => this._valueChanged('entity', ev.target.value));
+    this.shadowRoot.getElementById('graphs_per_row').addEventListener('change', (ev) => this._valueChanged('graphs_per_row', parseInt(ev.target.value) || 2));
+    this.shadowRoot.getElementById('show_header').addEventListener('change', (ev) => this._valueChanged('show_header', ev.target.checked));
+    this.shadowRoot.getElementById('show_graphs').addEventListener('change', (ev) => this._valueChanged('show_graphs', ev.target.checked));
+
+    this.shadowRoot.querySelectorAll('.sensor-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const checkedSensors = [];
+        this.shadowRoot.querySelectorAll('.sensor-checkbox:checked').forEach(checkedBox => {
+          checkedSensors.push(checkedBox.value);
+        });
+        this._valueChanged('show_sensors', checkedSensors);
+      });
+    });
+  }
+
+  // Odeslání změněné konfigurace zpět do jádra Home Assistenta
+  _valueChanged(item, value) {
+    if (!this._config) return;
+    
+    const newConfig = { ...this._config, [item]: value };
+    
+    // Vyvolání standardního HA eventu pro uložení konfigurace karty
+    const event = new CustomEvent("config-changed", {
+      detail: { config: newConfig },
+      bubbles: true,
+      composed: true,
+    });
+    this.dispatchEvent(event);
+  }
+}
+
+// Registrace elementu editoru do registru prohlížeče
+customElements.define("pocasimeteo-card-editor", PocasiMeteoCardEditor);
   
