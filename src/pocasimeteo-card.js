@@ -180,8 +180,9 @@ class PocasiMeteoCard extends HTMLElement {
     this.config = {
       entity: config.entity || null,
       graphs_per_row: config.graphs_per_row || 2,
-      hide_sensors: Array.isArray(config.hide_sensors) ? config.hide_sensors : [],
+      show_header: config.show_header !== false,
       show_graphs: config.show_graphs !== false,
+      hide_sensors: Array.isArray(config.hide_sensors) ? config.hide_sensors : [],
       debug: config.debug === true
     };
   }
@@ -265,7 +266,11 @@ class PocasiMeteoCard extends HTMLElement {
     // 4) Naplnit záhlaví daty
     this._updateVisualHeader(entity);
 
-    // 5) Záhlaví je nyní viditelné
+    // 5) Dynamické skrytí/zobrazení záhlaví podle konfigurace karty
+    const headerElement = this.shadowRoot.getElementById('pm-header');
+    if (headerElement) {
+      headerElement.style.display = this.config.show_header ? 'flex' : 'none';
+    }
 
     // 6) Vykreslení grafů se stavovým zámkem proti zacyklení
     if (this._fetchingHistory) {
@@ -436,6 +441,7 @@ class PocasiMeteoCard extends HTMLElement {
     card.classList.add('pm-card');
 
     const headerSec = document.createElement('div');
+    headerSec.id = 'pm-header';
     headerSec.classList.add('pm-header-section');
 
     const topDiv = document.createElement('div');
