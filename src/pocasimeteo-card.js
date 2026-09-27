@@ -181,7 +181,8 @@ class PocasiMeteoCard extends HTMLElement {
       entity: config.entity || null,
       graphs_per_row: config.graphs_per_row || 2,
       hide_sensors: Array.isArray(config.hide_sensors) ? config.hide_sensors : [],
-      show_graphs: config.show_graphs !== false
+      show_graphs: config.show_graphs !== false,
+      debug: config.debug === true
     };
   }
 
@@ -255,7 +256,9 @@ class PocasiMeteoCard extends HTMLElement {
     // 3) Pokud ještě není inicializováno → vytvořit záhlaví + skeleton grafů
     if (!this._initialized) {
       this._initializeHeaderSkeleton();
-      this._initializeGraphsSkeleton();
+      if (this.config.show_graphs !== false) {
+        this._initializeGraphsSkeleton();
+      }
       this._initialized = true;
     }
 
@@ -662,27 +665,63 @@ class PocasiMeteoCard extends HTMLElement {
     const rawHistoryData = {};
 
     // --- KROK 1: JEDINÝ HROMADNÝ FUNKČNÍ WEBSOCKET DOTAZ DO RECORDERU ---
-    // Sesbíráme pole reálných entity_id ze všech nakonfigurovaných senzorů
     const activeEntityIds = sensorsMeta.map(s => s.entity_id).filter(id => id);
 
     if (activeEntityIds.length > 0) {
       try {
+        // ================= DIAGNOSTICKÝ LOG START =================
+        const startTime = performance.now();
+        if (this.config.debug) { // 👍 Podmínka pro zapnutí
+          console.log("%c[MeteoCard Debug] Odesílám dotaz do HA Recorderu...", "color: #ffb300; font-weight: bold;");
+        }
+        // ==========================================================
+
         const resp = await hass.callWS({
           type: "history/history_during_period",
           start_time: since,
           end_time: new Date().toISOString(),
           entity_ids: activeEntityIds,
-          minimal_response: true, //## vyzkoušet s hodnotou false? 
-          significant_changes_only: false,
+          minimal_response: true,
+          significant_changes_only: true,
           no_attributes: true
         });
 
-        // Home Assistant vrátí objekt, kde klíče jsou entity_id. Rozřadíme je do rawHistoryData pod ID senzoru:
+        // ================= DIAGNOSTICKÝ LOG VÝSLEDKŮ =================
+        const duration = (performance.now() - startTime).toFixed(1);
+        
+        // Diagnostické výpočty spustíme jen pokud je zapnutý debug, abychom zbytečně nezatěžovali procesor
+        if (this.config.debug) { 
+          let totalPoints = 0;
+          const sensorPointsCount = {};
+
+          if (resp && typeof resp === 'object') {
+            Object.keys(resp).forEach(entityId => {
+              if (Array.isArray(resp[entityId])) {
+                const count = resp[entityId].length;
+                totalPoints += count;
+                const foundSensor = sensorsMeta.find(s => s.entity_id === entityId);
+                const sensorName = foundSensor ? foundSensor.id : entityId;
+                sensorPointsCount[sensorName] = `${count} bodů (${entityId})`;
+              }
+            });
+          }
+
+          console.groupCollapsed(`%c[MeteoCard Debug] Odezva z Recorderu za ${duration} ms (Celkem ${totalPoints} bodů)`, "color: #00df89; font-weight: bold;");
+          console.log(`1) Doba trvání dotazu: ${duration} ms`);
+          console.log(`2) Celkový počet vrácených bodů: ${totalPoints}`);
+          console.group("%c3) Počty bodů pro jednotlivé senzory:", "font-weight: bold;");
+          console.table(sensorPointsCount);
+          console.groupEnd();
+          console.groupCollapsed("%c4) Kompletní RAW data z HA Recorderu (klikněte pro rozbalení):", "font-weight: bold; color: #1e88e5;");
+          console.log(resp);
+          console.groupEnd();
+          console.groupEnd();
+        }
+        // =============================================================
+
         sensorsMeta.forEach(s => {
           rawHistoryData[s.id] = (resp && resp[s.entity_id]) ? resp[s.entity_id] : [];
         });
-
-        //##  console.log("DIAGNOSTIKA SUCCESS: Data z Recorderu úspěšně stažena v plné četnosti!", rawHistoryData);
 
       } catch (e) {
         console.error("DIAGNOSTIKA ERROR: Hromadný dotaz do Recorderu selhal:", e);
@@ -787,17 +826,6 @@ class PocasiMeteoCard extends HTMLElement {
       s.stats_mode = currentStats.stats_mode;
       s.stats_var = currentStats.stats_var;
 
-      // --- 🔵 NOVÝ DIAGNOSTICKÝ VÝPIS TRANSFORMACE //##---
-      if (s.id === 'teplota_vnejsi') {
-        console.log("DIAGNOSTIKA KROK 4 (teplota_vnejsi):", {
-          pocet_bodu: points.length,
-          prvni_bod: points[0],
-          posledni_bod: points[points.length - 1],
-          aktualni_cas_systemu: Date.now(),
-          vsechny_body: points
-        });
-      }
-      
       // --- OBNOVENÝ A OPRAVENÝ DESTRUKČNÍ MECHANISMUS PODLE ID CANVASU ---
       const targetCanvasId = `pm-graph-${s.id}`;
       if (this._charts && this._charts[targetCanvasId]) {
@@ -866,7 +894,7 @@ class PocasiMeteoCard extends HTMLElement {
             data: [...points],
             borderColor: color,
             backgroundColor: rgba,
-            tension: isStepped ? 0 : 0.4,
+            tension: s.graph_style === 'smooth' ? 0.4 : 0,
             cubicInterpolationMode: isStepped ? undefined : 'monotone', // Eliminuje falešné špičky a smyčky
             stepped: isStepped ? true : false,
             pointRadius: 0,
