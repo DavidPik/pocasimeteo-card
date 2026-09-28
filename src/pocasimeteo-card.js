@@ -1432,10 +1432,12 @@ class PocasiMeteoCardEditor extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
+    this._initialized = false; // Zamčení proti přepisování dialogu
   }
 
   setConfig(config) {
     this._config = config;
+    this._initialized = false; // Odemčení přepisování dialogu
   }
 
   set hass(hass) {
@@ -1455,6 +1457,10 @@ class PocasiMeteoCardEditor extends HTMLElement {
   _render() {
     if (!this._hass || !this._config) return;
 
+    // Kyyž je dialog již vykreslený, nechceme jej přepisovat
+    if (this._initialized) return; 
+    this._initialized = true;
+    
     // Vyfiltrujeme weather entity
     const weatherEntities = Object.keys(this._hass.states).filter(id => id.startsWith('weather.'));
     const currentShowSensors = this._config.show_sensors || [];
