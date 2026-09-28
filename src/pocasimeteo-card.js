@@ -1455,11 +1455,30 @@ class PocasiMeteoCardEditor extends HTMLElement {
   _render() {
     if (!this._hass || !this._config) return;
 
-    // Vyfiltrujeme pouze entity typu 'weather' z Home Assistenta
+    // Vyfiltrujeme weather entity
     const weatherEntities = Object.keys(this._hass.states).filter(id => id.startsWith('weather.'));
     const currentShowSensors = this._config.show_sensors || [];
 
-    // OPRAVENO: Odstraněna chybná zpětná lomítka z literálů ` ${ } `
+    // 1) BEZPEČNÉ GENEROVÁNÍ OPTIONS PRO SELECT (Pomocí standardního spojování řetězců)
+    let entitiesOptionsHtml = '';
+    for (let i = 0; i ' + ent + '</option>';
+    }
+
+    // 2) BEZPEČNÉ GENEROVÁNÍ CHECKBOXŮ PRO SENZORY (Pomocí standardního spojování řetězců)
+    let sensorsGridHtml = '';
+    const allSensors = this._allSensors;
+    for (let j = 0; j < allSensors.length; j++) {
+      const sensorId = allSensors[j];
+      const isChecked = currentShowSensors.includes(sensorId) ? 'checked' : '';
+      const cleanLabel = sensorId.replace('_', ' ').toUpperCase();
+
+      sensorsGridHtml += '<label class="pm-editor-switch">' +
+        '<input type="checkbox" class="sensor-checkbox" value="' + sensorId + '" ' + isChecked + '>' +
+        '<span class="pm-checkbox-label" title="' + cleanLabel + '">' + cleanLabel + '</span>' +
+        '</label>';
+    }
+
+    // Hlavní kostra formuláře používá statické hodnoty, což je pro parser bezpečné
     this.shadowRoot.innerHTML = `
       <style>
         .pm-editor-form { 
@@ -1525,9 +1544,7 @@ class PocasiMeteoCardEditor extends HTMLElement {
         <div class="pm-editor-row">
           Meteostanice (Weather entita):</label>
           
-            ${weatherEntities.map(ent => `
-              \){ent}</option>
-            `).join('')}
+            ${entitiesOptionsHtml}
           </select>
         </div>
 
@@ -1548,20 +1565,11 @@ class PocasiMeteoCardEditor extends HTMLElement {
           <span>Zobrazit sekce s grafy</span>
         </label>
 
-        <!-- 4) Výběr aktivních senzorů (show_sensors s otočenou logikou) -->
+        <!-- 4) Mřížka s bezpečně vygenerovanými checkboxy -->
         <div class="pm-editor-row">
           <label>Zobrazit vybrané grafy senzorů (pokud není vybrán žádný, zobrazí se všechny):</label>
           <div class="pm-editor-checkbox-grid">
-            ${this._allSensors.map(sensorId => {
-              const isChecked = currentShowSensors.includes(sensorId) ? 'checked' : '';
-              const cleanLabel = sensorId.replace('_', ' ').toUpperCase();
-              return `
-                <label class="pm-editor-switch">
-                  <input type="checkbox" class="sensor-checkbox" value="\({sensorId}" \){isChecked}>
-                  <span class="pm-checkbox-label" title="\({cleanLabel}">\){cleanLabel}</span>
-                </label>
-              `;
-            }).join('')}
+            ${sensorsGridHtml}
           </div>
         </div>
       </div>
@@ -1583,6 +1591,7 @@ class PocasiMeteoCardEditor extends HTMLElement {
       });
     });
   }
+
 
   _valueChanged(item, value) {
     if (!this._config) return;
