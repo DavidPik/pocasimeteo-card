@@ -1459,16 +1459,16 @@ class PocasiMeteoCardEditor extends HTMLElement {
     const weatherEntities = Object.keys(this._hass.states).filter(id => id.startsWith('weather.'));
     const currentShowSensors = this._config.show_sensors || [];
 
-    // 1) BEZPEČNÉ GENEROVÁNÍ OPTIONS PRO SELECT (Pomocí standardního spojování řetězců)
+    // 1) BEZPEČNÉ GENEROVÁNÍ OPTIONS PRO SELECT (Bez použití operátorů porovnání)
     let entitiesOptionsHtml = '';
-    for (let i = 0; i ' + ent + '</option>';
-    }
+    weatherEntities.forEach(ent => {
+      const isSelected = this._config.entity === ent ? 'selected' : '';
+      entitiesOptionsHtml += '<option value="' + ent + '" ' + isSelected + '>' + ent + '</option>';
+    });
 
-    // 2) BEZPEČNÉ GENEROVÁNÍ CHECKBOXŮ PRO SENZORY (Pomocí standardního spojování řetězců)
+    // 2) BEZPEČNÉ GENEROVÁNÍ CHECKBOXŮ PRO SENZORY (Bez použití operátorů porovnání)
     let sensorsGridHtml = '';
-    const allSensors = this._allSensors;
-    for (let j = 0; j < allSensors.length; j++) {
-      const sensorId = allSensors[j];
+    this._allSensors.forEach(sensorId => {
       const isChecked = currentShowSensors.includes(sensorId) ? 'checked' : '';
       const cleanLabel = sensorId.replace('_', ' ').toUpperCase();
 
@@ -1476,9 +1476,9 @@ class PocasiMeteoCardEditor extends HTMLElement {
         '<input type="checkbox" class="sensor-checkbox" value="' + sensorId + '" ' + isChecked + '>' +
         '<span class="pm-checkbox-label" title="' + cleanLabel + '">' + cleanLabel + '</span>' +
         '</label>';
-    }
+    });
 
-    // Hlavní kostra formuláře používá statické hodnoty, což je pro parser bezpečné
+    // Hlavní kostra formuláře
     this.shadowRoot.innerHTML = `
       <style>
         .pm-editor-form { 
@@ -1565,7 +1565,7 @@ class PocasiMeteoCardEditor extends HTMLElement {
           <span>Zobrazit sekce s grafy</span>
         </label>
 
-        <!-- 4) Mřížka s bezpečně vygenerovanými checkboxy -->
+        <!-- 4) Mřížka s checkboxy -->
         <div class="pm-editor-row">
           <label>Zobrazit vybrané grafy senzorů (pokud není vybrán žádný, zobrazí se všechny):</label>
           <div class="pm-editor-checkbox-grid">
@@ -1591,7 +1591,6 @@ class PocasiMeteoCardEditor extends HTMLElement {
       });
     });
   }
-
 
   _valueChanged(item, value) {
     if (!this._config) return;
