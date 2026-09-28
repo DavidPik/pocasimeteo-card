@@ -1421,23 +1421,31 @@ class PocasiMeteoCard extends HTMLElement {
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
 
 /**
- * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU (v2.1 - Stabilní verze)
- * Plně kompatibilní s asynchronním stavovým enginem Lovelace.
+ * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU (v2.2 - Plně opravená verze)
+ * Splňuje přísná pravidla immutability a asynchronního životního cyklu Lovelace.
  */
 class PocasiMeteoCardEditor extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._currentEntityId = null;
   }
 
+  /**
+   * Spustí se jednorázově při inicializaci nebo při ruční změně YAML kódu.
+   * Zde vygenerujeme kompletní HTML strukturu formuláře.
+   */
   setConfig(config) {
     this._config = config;
+    this._renderInitialForm();
   }
 
+  /**
+   * Home Assistant pravidelně aktualizuje stavy entit.
+   * V této verzi je metoda pasivní, nepřepisuje HTML a neruší rozdělanou práci uživatele.
+   */
   set hass(hass) {
     this._hass = hass;
-    this._render();
+    this._updateWeatherEntitiesDropdown();
   }
 
   get _allSensors() {
@@ -1448,29 +1456,15 @@ class PocasiMeteoCardEditor extends HTMLElement {
     ];
   }
 
-  _render() {
-    if (!this._hass || !this._config) return;
+  /**
+   * Vygeneruje statickou kostru formuláře a naváže události. Spustí se jen jednou.
+   */
+  _renderInitialForm() {
+    if (!this._config) return;
 
-    // Detekujeme reálnou změnu sledované stanice. Pokud se stanice nezměnila,
-    // pouze aktualizujeme stavy prvků na základě interakce uživatele a nepřepisujeme HTML.
-    if (this._currentEntityId === this._config.entity && this.shadowRoot.querySelector('.pm-editor-form')) {
-      this._synchronizeUiElements();
-      return;
-    }
-    
-    this._currentEntityId = this._config.entity;
-
-    const weatherEntities = Object.keys(this._hass.states).filter(id => id.startsWith('weather.'));
     const currentShowSensors = this._config.show_sensors || [];
 
-    // Generování options pro rozbalovací seznam entit
-    let entitiesOptionsHtml = '';
-    weatherEntities.forEach(ent => {
-      const isSelected = this._config.entity === ent ? 'selected' : '';
-      entitiesOptionsHtml += '<option value="' + ent + '" ' + isSelected + '>' + ent + '</option>';
-    });
-
-    // Generování mřížky checkboxů pro jednotlivé grafy
+    // Bezpečné generování checkboxů pomocí standardního spojování řetězců
     let sensorsGridHtml = '';
     this._allSensors.forEach(sensorId => {
       const isChecked = currentShowSensors.includes(sensorId) ? 'checked' : '';
@@ -1535,18 +1529,13 @@ class PocasiMeteoCardEditor extends HTMLElement {
           border-radius: 8px;
           border: 1px solid rgba(255,255,255,0.05);
         }
-        .pm-checkbox-label {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
       </style>
 
       <div class="pm-editor-form">
         <div class="pm-editor-row">
           Meteostanice (Weather entita):</label>
           
-            ${entitiesOptionsHtml}
+            ${this._config.entity || 'Načítám...'}</option>
           </select>
         </div>
 
@@ -1578,30 +1567,22 @@ class PocasiMeteoCardEditor extends HTMLElement {
   }
 
   /**
-   * Pasivní aktualizace prvků. Udržuje checkboxy stabilní a zamezuje jejich resetování,
-   * přičemž dovoluje náhledu karty vedle se plynule překreslovat.
+   * Dynamicky plní dostupné weather entity z HA bez přepisování celého formuláře.
    */
-  _synchronizeUiElements() {
+  _updateWeatherEntitiesDropdown() {
+    if (!this._hass) return;
     const selectEl = this.shadowRoot.getElementById('entity');
-    if (selectEl && selectEl.value !== this._config.entity) {
-      selectEl.value = this._config.entity || '';
-    }
-    
-    const graphsInput = this.shadowRoot.getElementById('graphs_per_row');
-    if (graphsInput && parseInt(graphsInput.value) !== this._config.graphs_per_row) {
-      graphsInput.value = this._config.graphs_per_row || 2;
-    }
-    
-    const headerCb = this.shadowRoot.getElementById('show_header');
-    if (headerCb) headerCb.checked = this._config.show_header !== false;
-    
-    const graphsCb = this.shadowRoot.getElementById('show_graphs');
-    if (graphsCb) graphsCb.checked = this._config.show_graphs !== false;
-    
-    const currentShowSensors = this._config.show_sensors || [];
-    const checkboxes = this.shadowRoot.querySelectorAll('.sensor-checkbox');
-    checkboxes.forEach(cb => {
-      cb.checked = currentShowSensors.includes(cb.value);
+    if (!selectEl || selectEl.options.length > 1) return; // Pokud už entity máme, znovu je nenačítáme
+
+    const weatherEntities = Object.keys(this._hass.states).filter(id => id.startsWith('weather.'));
+    selectEl.innerHTML = ''; // Vyčistit dummy "Načítám..." option
+
+    weatherEntities.forEach(ent => {
+      const option = document.createElement('option');
+      option.value = ent;
+      option.textContent = ent;
+      option.selected = this._config.entity === ent;
+      selectEl.appendChild(option);
     });
   }
 
@@ -1623,18 +1604,22 @@ class PocasiMeteoCardEditor extends HTMLElement {
   }
 
   /**
-   * Klíčová oprava komunikace s Lovelace enginem.
-   * Nová konfigurace se předává přímo v poli 'config', nikoliv vnořeně.
+   * HLAVNÍ OPRAVA IMMUTABILITY
+   * Vytváří striktně nový konfigurační objekt, což aktivuje tlačítko Uložit i YAML editor.
    */
   _valueChanged(item, value) {
     if (!this._config) return;
+
+    // Vytvoříme HLUBOKÝ NOVÝ KLON celého objektu konfigurace (Změna pointeru v paměti)
+    const updatedConfig = JSON.parse(JSON.stringify(this._config));
+    updatedConfig[item] = value;
     
-    // 1) Aktualizace lokálního konfiguračního objektu editoru
-    this._config = { ...this._config, [item]: value };
-    
-    // 2) Odeslání standardního validního Lovelace eventu do jádra HA
+    // Zapíšeme změnu do naší lokální proměnné, aby zůstala zachována kontinuita
+    this._config = updatedConfig;
+
+    // Odpálíme událost config-changed s novou instancí objektu
     const event = new CustomEvent("config-changed", {
-      detail: { config: this._config }, // 👍 Zde musí být čisté pole bez dalších vnoření
+      detail: { config: updatedConfig },
       bubbles: true,
       composed: true,
     });
