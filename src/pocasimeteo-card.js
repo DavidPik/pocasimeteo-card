@@ -1421,43 +1421,6 @@ class PocasiMeteoCard extends HTMLElement {
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
 
 /**
- * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU (v2.2 - Plně opravená verze)
- * Splňuje přísná pravidla immutability a asynchronního životního cyklu Lovelace.
- */
-class PocasiMeteoCardEditor extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: 'open' });
-  }
-
-  /**
-   * Spustí se jednorázově při inicializaci nebo při ruční změně YAML kódu.
-   * Zde vygenerujeme kompletní HTML strukturu formuláře.
-   */
-  setConfig(config) {
-    this._config = config;
-    this._renderInitialForm();
-  }
-
-  /**
-   * Home Assistant pravidelně aktualizuje stavy entit.
-   * V této verzi je metoda pasivní, nepřepisuje HTML a neruší rozdělanou práci uživatele.
-   */
-  set hass(hass) {
-    this._hass = hass;
-    this._updateWeatherEntitiesDropdown();
-  }
-
-  get _allSensors() {
-    return [
-      'teplota_vnejsi', 'vlhkost_vnejsi', 'tlak_relativni', 'srazky_intenzita',
-      'vitr_rychlost', 'vitr_narazy', 'vitr_smer', 'slunecni_zareni', 'uv_index',
-      'teplota_vnitrni', 'vlhkost_vnitrni'
-    ];
-  }
-}
-
-/**
  * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU (v2.3 - Bezpečný životní cyklus prvků)
  * Plně ošetřený proti předčasnému volání DOM metod před připojením do HA stromu.
  */
