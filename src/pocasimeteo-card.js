@@ -208,19 +208,19 @@ class PocasiMeteoCard extends HTMLElement {
    */
   connectedCallback() {
     this._resizeObserver = new ResizeObserver(() => {
-      if (!this._initialized) return;
-
+      // 👍 Odstraněna blokující podmínka !this._initialized, která v asynchronním dialogu způsobovala zamrznutí
       if (this._currentHass && !this._rendering) {
         const entityId = this.config?.entity;
         const entity = entityId ? this._currentHass.states[entityId] : null;
 
         if (entity) {
           this._rendering = true;
+          // Zkrácení timeoutu na 10ms pro okamžitou vizuální odezvu v dialogu
           setTimeout(() => {
             this._updateCharts(this._currentHass, entity).finally(() => {
               this._rendering = false;
             });
-          }, 50);
+          }, 10);
         }
       }
     });
@@ -1436,9 +1436,22 @@ class PocasiMeteoCardEditor extends HTMLElement {
    * Spustí se při uložení nebo načtení YAML konfigurace.
    */
   setConfig(config) {
-    this._config = config;
-    if (this.isConnected) {
-      this._renderInitialForm();
+    this.config = {
+      entity: config.entity || null,
+      graphs_per_row: config.graphs_per_row || 2,
+      show_sensors: Array.isArray(config.show_sensors) ? config.show_sensors : [],
+      show_graphs: config.show_graphs !== false,
+      show_header: config.show_header !== false,
+      debug: config.debug === true
+    };
+
+    // ŽIVÝ NÁHLED: Pokud už máme k dispozici data a HA změnil konfiguraci v editoru,
+    // okamžitě vynutíme překreslení mřížky dlaždic, aby uživatel viděl změny show_sensors v reálném čase.
+    if (this._initialized && this._currentHass) {
+      const entity = this.config.entity ? this._currentHass.states[this.config.entity] : null;
+      if (entity) {
+        this._updateCharts(this._currentHass, entity);
+      }
     }
   }
 
