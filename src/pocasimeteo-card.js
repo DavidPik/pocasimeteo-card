@@ -1424,6 +1424,10 @@ customElements.define('pocasimeteo-card', PocasiMeteoCard);
  * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU
  * Generuje klikací formulář v UI rozhraní Home Assistenta.
  */
+/**
+ * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU
+ * Opravená verze s funkčními šablonami bez chybného escapování
+ */
 class PocasiMeteoCardEditor extends HTMLElement {
   constructor() {
     super();
@@ -1451,64 +1455,119 @@ class PocasiMeteoCardEditor extends HTMLElement {
   _render() {
     if (!this._hass || !this._config) return;
 
-    // Vyfiltrujeme pouze entity typu 'weather' pro rozbalovací seznam
+    // Vyfiltrujeme pouze entity typu 'weather' z Home Assistenta
     const weatherEntities = Object.keys(this._hass.states).filter(id => id.startsWith('weather.'));
     const currentShowSensors = this._config.show_sensors || [];
 
+    // OPRAVENO: Odstraněna chybná zpětná lomítka z literálů ` ${ } `
     this.shadowRoot.innerHTML = `
       <style>
-        .pm-editor-form { display: flex; flex-direction: column; gap: 16px; font-family: sans-serif; color: var(--primary-text-color, #fff); }
-        .pm-editor-row { display: flex; flex-direction: column; gap: 6px; }
-        .pm-editor-row label { font-size: 14px; font-weight: 600; }
-        .pm-editor-row select, .pm-editor-row input[type="number"] { 
-          padding: 8px; border-radius: 4px; border: 1px solid var(--divider-color, #rgba(255,255,255,0.2));
-          background: var(--card-background-color, #2c2c2c); color: var(--primary-text-color, #fff);
+        .pm-editor-form { 
+          display: flex; 
+          flex-direction: column; 
+          gap: 16px; 
+          font-family: var(--paper-font-body1_-_font-family, sans-serif); 
+          color: var(--primary-text-color, #fff); 
+          padding: 8px 0;
         }
-        .pm-editor-switch { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; }
-        .pm-editor-checkbox-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 4px; }
+        .pm-editor-row { 
+          display: flex; 
+          flex-direction: column; 
+          gap: 6px; 
+        }
+        .pm-editor-row label { 
+          font-size: 14px; 
+          font-weight: 500;
+          color: var(--secondary-text-color, #e0e0e0);
+        }
+        .pm-editor-row select, .pm-editor-row input[type="number"] { 
+          padding: 10px; 
+          border-radius: 4px; 
+          border: 1px solid var(--outline-color, rgba(255,255,255,0.2));
+          background: var(--mdc-text-field-fill-color, #2c2c2c); 
+          color: var(--primary-text-color, #fff);
+          font-size: 15px;
+          outline: none;
+        }
+        .pm-editor-switch { 
+          display: flex; 
+          align-items: center; 
+          gap: 12px; 
+          font-size: 14px; 
+          cursor: pointer;
+          user-select: none;
+          padding: 4px 0;
+        }
+        .pm-editor-switch input[type="checkbox"] {
+          width: 18px;
+          height: 18px;
+          cursor: pointer;
+        }
+        .pm-editor-checkbox-grid { 
+          display: grid; 
+          grid-template-columns: repeat(2, 1fr); 
+          gap: 10px; 
+          margin-top: 6px; 
+          background: rgba(0,0,0,0.15);
+          padding: 12px;
+          border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.05);
+        }
+        .pm-checkbox-label {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
       </style>
 
       <div class="pm-editor-form">
         <!-- 1) Výběr Weather Entity -->
         <div class="pm-editor-row">
-          <label>Meteostanice (Weather entita):</label>
+          Meteostanice (Weather entita):</label>
           
-            ${weatherEntities.map(ent => `\){ent}</option>`).join('')}
+            ${weatherEntities.map(ent => `
+              \){ent}</option>
+            `).join('')}
           </select>
         </div>
 
         <!-- 2) Počet grafů v řadě -->
         <div class="pm-editor-row">
-          <label>Počet grafů v řadě:</label>
+          <label for="graphs_per_row">Počet grafů v řadě (1 až 4):</label>
           <input type="number" id="graphs_per_row" min="1" max="4" value="${this._config.graphs_per_row || 2}">
         </div>
 
         <!-- 3) Přepínače Záhlaví a Grafů -->
         <label class="pm-editor-switch">
           <input type="checkbox" id="show_header" ${this._config.show_header !== false ? 'checked' : ''}>
-          Zobrazit záhlaví stanice (Header)
+          <span>Zobrazit záhlaví stanice (Header)</span>
         </label>
 
         <label class="pm-editor-switch">
           <input type="checkbox" id="show_graphs" ${this._config.show_graphs !== false ? 'checked' : ''}>
-          Zobrazit sekce s grafy
+          <span>Zobrazit sekce s grafy</span>
         </label>
 
-        <!-- 4) Výběr aktivních senzorů (show_sensors) -->
+        <!-- 4) Výběr aktivních senzorů (show_sensors s otočenou logikou) -->
         <div class="pm-editor-row">
           <label>Zobrazit vybrané grafy senzorů (pokud není vybrán žádný, zobrazí se všechny):</label>
           <div class="pm-editor-checkbox-grid">
-            ${this._allSensors.map(sensorId => `
-              <label class="pm-editor-switch">
-                <input type="checkbox" class="sensor-checkbox" value="\${sensorId}" \({currentShowSensors.includes(sensorId) ? 'checked' : ''}>\){sensorId.replace('_', ' ').toUpperCase()}
-              </label>
-            `).join('')}
+            ${this._allSensors.map(sensorId => {
+              const isChecked = currentShowSensors.includes(sensorId) ? 'checked' : '';
+              const cleanLabel = sensorId.replace('_', ' ').toUpperCase();
+              return `
+                <label class="pm-editor-switch">
+                  <input type="checkbox" class="sensor-checkbox" value="\({sensorId}" \){isChecked}>
+                  <span class="pm-checkbox-label" title="\({cleanLabel}">\){cleanLabel}</span>
+                </label>
+              `;
+            }).join('')}
           </div>
         </div>
       </div>
     `;
 
-    // Navázání eventů pro zachycení kliknutí a okamžitý zápis do Lovelace konfigurace
+    // Navázání posluchačů událostí
     this.shadowRoot.getElementById('entity').addEventListener('change', (ev) => this._valueChanged('entity', ev.target.value));
     this.shadowRoot.getElementById('graphs_per_row').addEventListener('change', (ev) => this._valueChanged('graphs_per_row', parseInt(ev.target.value) || 2));
     this.shadowRoot.getElementById('show_header').addEventListener('change', (ev) => this._valueChanged('show_header', ev.target.checked));
@@ -1525,22 +1584,19 @@ class PocasiMeteoCardEditor extends HTMLElement {
     });
   }
 
-  // Odeslání změněné konfigurace zpět do jádra Home Assistenta
   _valueChanged(item, value) {
     if (!this._config) return;
-    
     const newConfig = { ...this._config, [item]: value };
     
-    // Vyvolání standardního HA eventu pro uložení konfigurace karty
-    const event = new CustomEvent("config-changed", {
+    // Vyvolání standardní změny konfigurace v Lovelace rozhraní
+    this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config: newConfig },
       bubbles: true,
       composed: true,
-    });
-    this.dispatchEvent(event);
+    }));
   }
 }
 
-// Registrace elementu editoru do registru prohlížeče
+// Opětovná registrace elementu editoru
 customElements.define("pocasimeteo-card-editor", PocasiMeteoCardEditor);
-  
+
