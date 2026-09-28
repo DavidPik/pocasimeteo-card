@@ -288,21 +288,15 @@ class PocasiMeteoCard extends HTMLElement {
       headerElement.style.display = this.config.show_header ? 'flex' : 'none';
     }
 
-    // 6) Vykreslení grafů se stavovým zámkem proti zacyklení
-    if (this._fetchingHistory) {
-      return;
-    }
-
+    // 6) Bezpečné a plynulé asynchronní překreslení grafů bez blokujícího zámku history
     if (!this._rendering) {
       this._rendering = true;
-      this._fetchingHistory = true; // Uzamkneme kartu pro asynchronní operaci Recorderu
 
       setTimeout(() => {
         this._updateCharts(hass, entity).finally(() => {
           this._rendering = false;
-          this._fetchingHistory = false; // Zámek uvolníme až po kompletním dokončení renderu Chart.js
         });
-      }, 50);
+      }, 20); // Krátký timeout pro plynulé odbavení v UI dialogu
     }
   } // <-- Konec metody set hass(hass)
 
@@ -809,12 +803,28 @@ class PocasiMeteoCard extends HTMLElement {
 
       const sState = hass.states[s.entity_id];
       
-      // OPRAVENO: Bezpečné ověření existence pole (obrana proti undefined pádům)
+      // Bezpečné ověření existence pole (obrana proti undefined pádům)
       const showSensorsArr = Array.isArray(this.config?.show_sensors) ? this.config.show_sensors : [];
       
       // Senzor se zobrazí, pokud pole show_sensors je prázdné, NEBO pokud ID senzoru v tomto poli explicitně figuruje
       const isVisible = s.visible !== false && 
         (showSensorsArr.length === 0 || showSensorsArr.includes(String(s.id)));
+      
+      domItem.tile.style.display = isVisible ? 'flex' : 'none';
+      
+      // HLAVNÍ OPRAVA: Pokud senzor nemá být vidět, vymažeme a zničíme jeho graf z paměti a okamžitě přeskočíme jeho vykreslování
+      if (!isVisible || !sState) {
+        const targetCanvasId = "pm-graph-" + s.id;
+        if (this._charts && this._charts[targetCanvasId]) {
+          try {
+            this._charts[targetCanvasId].destroy();
+            this._charts[targetCanvasId] = null;
+          } catch (e) {
+            console.warn('Chyba při mazání neaktivního grafu:', targetCanvasId, e);
+          }
+        }
+        return; // Výborně, nepokračujeme dál ve vykreslování tohoto neaktivního senzoru
+      }
 
       // Aktualizace textu nadpisu s jednotkou reálně z HA stavu
       const unit = sState.attributes.unit_of_measurement || '';
