@@ -1433,44 +1433,31 @@ class PocasiMeteoCardEditor extends HTMLElement {
   }
 
   /**
-   * Spustí se při uložení nebo načtení YAML konfigurace.
+   * Spustí se pokaždé, když se načte nebo změní YAML/UI konfigurace.
+   * Bezpečně vygeneruje formulář bez ohledu na stav připojení do DOM stromu.
    */
   setConfig(config) {
-    this.config = {
-      entity: config.entity || null,
-      graphs_per_row: config.graphs_per_row || 2,
-      show_sensors: Array.isArray(config.show_sensors) ? config.show_sensors : [],
-      show_graphs: config.show_graphs !== false,
-      show_header: config.show_header !== false,
-      debug: config.debug === true
-    };
-
-    // ŽIVÝ NÁHLED: Pokud už máme k dispozici data a HA změnil konfiguraci v editoru,
-    // okamžitě vynutíme překreslení mřížky dlaždic, aby uživatel viděl změny show_sensors v reálném čase.
-    if (this._initialized && this._currentHass) {
-      const entity = this.config.entity ? this._currentHass.states[this.config.entity] : null;
-      if (entity) {
-        this._updateCharts(this._currentHass, entity);
-      }
-    }
+    this._config = config;
+    this._renderInitialForm();
   }
 
   /**
-   * Pravidelná dodávka stavů entit z Home Assistenta.
+   * Pravidelná synchronizace entit z Home Assistenta.
    */
   set hass(hass) {
     this._hass = hass;
-    if (this.isConnected) {
-      this._updateWeatherEntitiesDropdown();
-    }
+    this._updateWeatherEntitiesDropdown();
   }
 
   /**
-   * Životní cyklus Web Components: Spustí se ve chvíli, kdy HA bezpečně 
-   * vloží komponentu editoru do DOM stromu stránky.
+   * Životní cyklus Web Components: Pojistka pro spolehlivé naplnění dat
+   * ve chvíli, kdy byl prvek reálně zobrazen na obrazovce.
    */
   connectedCallback() {
-    this._renderInitialForm();
+    const formExists = this.shadowRoot.querySelector('.pm-editor-form');
+    if (!formExists) {
+      this._renderInitialForm();
+    }
     this._updateWeatherEntitiesDropdown();
   }
 
