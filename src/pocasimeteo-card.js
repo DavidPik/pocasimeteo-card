@@ -1421,17 +1421,14 @@ class PocasiMeteoCard extends HTMLElement {
 customElements.define('pocasimeteo-card', PocasiMeteoCard);
 
 /**
- * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU
- * Generuje klikací formulář v UI rozhraní Home Assistenta.
- */
-/**
- * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU
- * Opravená verze s funkčními šablonami bez chybného escapování
+ * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU (v2.1 - Stabilní verze)
+ * Plně kompatibilní s asynchronním stavovým enginem Lovelace.
  */
 class PocasiMeteoCardEditor extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
+    this._currentEntityId = null;
   }
 
   setConfig(config) {
@@ -1443,7 +1440,6 @@ class PocasiMeteoCardEditor extends HTMLElement {
     this._render();
   }
 
-  // Hromadný seznam všech dostupných ID senzorů pro zaškrtávací políčka
   get _allSensors() {
     return [
       'teplota_vnejsi', 'vlhkost_vnejsi', 'tlak_relativni', 'srazky_intenzita',
@@ -1455,49 +1451,26 @@ class PocasiMeteoCardEditor extends HTMLElement {
   _render() {
     if (!this._hass || !this._config) return;
 
-    // Pokud už formulář v Shadow DOM existuje, nebudeme přepisovat innerHTML (to by resetovalo checkboxy),
-    // pouze synchronizujeme stavy prvků podle aktuální konfigurace v reálném čase.
-    const formExists = this.shadowRoot.querySelector('.pm-editor-form');
-    if (formExists) {
-      // Synchronizace selectu entity
-      const selectEl = this.shadowRoot.getElementById('entity');
-      if (selectEl && selectEl.value !== this._config.entity) {
-        selectEl.value = this._config.entity || '';
-      }
-      
-      // Synchronizace počtu grafů
-      const graphsInput = this.shadowRoot.getElementById('graphs_per_row');
-      if (graphsInput && parseInt(graphsInput.value) !== this._config.graphs_per_row) {
-        graphsInput.value = this._config.graphs_per_row || 2;
-      }
-      
-      // Synchronizace hlavních přepínačů
-      const headerCb = this.shadowRoot.getElementById('show_header');
-      if (headerCb) headerCb.checked = this._config.show_header !== false;
-      
-      const graphsCb = this.shadowRoot.getElementById('show_graphs');
-      if (graphsCb) graphsCb.checked = this._config.show_graphs !== false;
-      
-      // Synchronizace mřížky senzorů (show_sensors)
-      const currentShowSensors = this._config.show_sensors || [];
-      const checkboxes = this.shadowRoot.querySelectorAll('.sensor-checkbox');
-      checkboxes.forEach(cb => {
-        cb.checked = currentShowSensors.includes(cb.value);
-      });
-      
-      return; // Přerušíme vykonávání, abychom nepřepisovali innerHTML balastem
+    // Detekujeme reálnou změnu sledované stanice. Pokud se stanice nezměnila,
+    // pouze aktualizujeme stavy prvků na základě interakce uživatele a nepřepisujeme HTML.
+    if (this._currentEntityId === this._config.entity && this.shadowRoot.querySelector('.pm-editor-form')) {
+      this._synchronizeUiElements();
+      return;
     }
+    
+    this._currentEntityId = this._config.entity;
 
-    // --- PRVNÍ RENDER (Spustí se jen jednou při otevření dialogu) ---
     const weatherEntities = Object.keys(this._hass.states).filter(id => id.startsWith('weather.'));
     const currentShowSensors = this._config.show_sensors || [];
 
+    // Generování options pro rozbalovací seznam entit
     let entitiesOptionsHtml = '';
     weatherEntities.forEach(ent => {
       const isSelected = this._config.entity === ent ? 'selected' : '';
       entitiesOptionsHtml += '<option value="' + ent + '" ' + isSelected + '>' + ent + '</option>';
     });
 
+    // Generování mřížky checkboxů pro jednotlivé grafy
     let sensorsGridHtml = '';
     this._allSensors.forEach(sensorId => {
       const isChecked = currentShowSensors.includes(sensorId) ? 'checked' : '';
@@ -1509,7 +1482,6 @@ class PocasiMeteoCardEditor extends HTMLElement {
         '</label>';
     });
 
-    // Hlavní kostra formuláře
     this.shadowRoot.innerHTML = `
       <style>
         .pm-editor-form { 
@@ -1571,7 +1543,6 @@ class PocasiMeteoCardEditor extends HTMLElement {
       </style>
 
       <div class="pm-editor-form">
-        <!-- 1) Výběr Weather Entity -->
         <div class="pm-editor-row">
           Meteostanice (Weather entita):</label>
           
@@ -1579,13 +1550,11 @@ class PocasiMeteoCardEditor extends HTMLElement {
           </select>
         </div>
 
-        <!-- 2) Počet grafů v řadě -->
         <div class="pm-editor-row">
           <label for="graphs_per_row">Počet grafů v řadě (1 až 4):</label>
           <input type="number" id="graphs_per_row" min="1" max="4" value="${this._config.graphs_per_row || 2}">
         </div>
 
-        <!-- 3) Přepínače Záhlaví a Grafů -->
         <label class="pm-editor-switch">
           <input type="checkbox" id="show_header" ${this._config.show_header !== false ? 'checked' : ''}>
           <span>Zobrazit záhlaví stanice (Header)</span>
@@ -1596,7 +1565,6 @@ class PocasiMeteoCardEditor extends HTMLElement {
           <span>Zobrazit sekce s grafy</span>
         </label>
 
-        <!-- 4) Mřížka s checkboxy -->
         <div class="pm-editor-row">
           <label>Zobrazit vybrané grafy senzorů (pokud není vybrán žádný, zobrazí se všechny):</label>
           <div class="pm-editor-checkbox-grid">
@@ -1606,7 +1574,38 @@ class PocasiMeteoCardEditor extends HTMLElement {
       </div>
     `;
 
-    // Navázání posluchačů událostí
+    this._attachEventListeners();
+  }
+
+  /**
+   * Pasivní aktualizace prvků. Udržuje checkboxy stabilní a zamezuje jejich resetování,
+   * přičemž dovoluje náhledu karty vedle se plynule překreslovat.
+   */
+  _synchronizeUiElements() {
+    const selectEl = this.shadowRoot.getElementById('entity');
+    if (selectEl && selectEl.value !== this._config.entity) {
+      selectEl.value = this._config.entity || '';
+    }
+    
+    const graphsInput = this.shadowRoot.getElementById('graphs_per_row');
+    if (graphsInput && parseInt(graphsInput.value) !== this._config.graphs_per_row) {
+      graphsInput.value = this._config.graphs_per_row || 2;
+    }
+    
+    const headerCb = this.shadowRoot.getElementById('show_header');
+    if (headerCb) headerCb.checked = this._config.show_header !== false;
+    
+    const graphsCb = this.shadowRoot.getElementById('show_graphs');
+    if (graphsCb) graphsCb.checked = this._config.show_graphs !== false;
+    
+    const currentShowSensors = this._config.show_sensors || [];
+    const checkboxes = this.shadowRoot.querySelectorAll('.sensor-checkbox');
+    checkboxes.forEach(cb => {
+      cb.checked = currentShowSensors.includes(cb.value);
+    });
+  }
+
+  _attachEventListeners() {
     this.shadowRoot.getElementById('entity').addEventListener('change', (ev) => this._valueChanged('entity', ev.target.value));
     this.shadowRoot.getElementById('graphs_per_row').addEventListener('change', (ev) => this._valueChanged('graphs_per_row', parseInt(ev.target.value) || 2));
     this.shadowRoot.getElementById('show_header').addEventListener('change', (ev) => this._valueChanged('show_header', ev.target.checked));
@@ -1623,21 +1622,24 @@ class PocasiMeteoCardEditor extends HTMLElement {
     });
   }
 
+  /**
+   * Klíčová oprava komunikace s Lovelace enginem.
+   * Nová konfigurace se předává přímo v poli 'config', nikoliv vnořeně.
+   */
   _valueChanged(item, value) {
     if (!this._config) return;
-
-    // Okamžitá aktualizace interního stavu editoru před odesláním do HA
+    
+    // 1) Aktualizace lokálního konfiguračního objektu editoru
     this._config = { ...this._config, [item]: value };
     
-    // Vyvolání standardní změny konfigurace v Lovelace rozhraní
-    this.dispatchEvent(new CustomEvent("config-changed", {
-      detail: { config: newConfig },
+    // 2) Odeslání standardního validního Lovelace eventu do jádra HA
+    const event = new CustomEvent("config-changed", {
+      detail: { config: this._config }, // 👍 Zde musí být čisté pole bez dalších vnoření
       bubbles: true,
       composed: true,
-    }));
+    });
+    this.dispatchEvent(event);
   }
 }
 
-// Opětovná registrace elementu editoru
 customElements.define("pocasimeteo-card-editor", PocasiMeteoCardEditor);
-
