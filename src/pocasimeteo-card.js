@@ -809,10 +809,12 @@ class PocasiMeteoCard extends HTMLElement {
 
       const sState = hass.states[s.entity_id];
       
-      // Pokud uživatel skryl senzor v konfiguraci, dlaždici zneviditelníme bez destrukce DOMu
-      const isVisible = s.visible !== false && (this.config.show_sensors.length === 0 || this.config.show_sensors.includes(s.id));
-      domItem.tile.style.display = isVisible ? 'flex' : 'none';
-      if (!isVisible || !sState) return;
+      // OPRAVENO: Bezpečné ověření existence pole (obrana proti undefined pádům)
+      const showSensorsArr = Array.isArray(this.config?.show_sensors) ? this.config.show_sensors : [];
+      
+      // Senzor se zobrazí, pokud pole show_sensors je prázdné, NEBO pokud ID senzoru v tomto poli explicitně figuruje
+      const isVisible = s.visible !== false && 
+        (showSensorsArr.length === 0 || showSensorsArr.includes(String(s.id)));
 
       // Aktualizace textu nadpisu s jednotkou reálně z HA stavu
       const unit = sState.attributes.unit_of_measurement || '';
