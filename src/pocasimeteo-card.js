@@ -1455,6 +1455,7 @@ class PocasiMeteoCardEditor extends HTMLElement {
       'teplota_vnitrni', 'vlhkost_vnitrni'
     ];
   }
+}
 
 /**
  * VIZUÁLNÍ EDITOR PRO POČASÍMETEO KARTU (v2.3 - Bezpečný životní cyklus prvků)
