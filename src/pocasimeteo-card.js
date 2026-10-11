@@ -1196,6 +1196,7 @@ class PocasiMeteoCard extends HTMLElement {
         const { ctx, chartArea } = chart;
         const { cx, cy, R } = computeChartGeometry(chartArea);
         const maxBin = Math.max(...bins) || 1;
+        const totalCount = bins.reduce((sum, bin) => sum + bin, 0);
         const sectorAngle = 22.5 * Math.PI / 180;
 
         ctx.save();
@@ -1297,7 +1298,7 @@ class PocasiMeteoCard extends HTMLElement {
           const { x: mx, y: my } = chart.$mouse;
 
           const label = WIND_DIR_LABELS[index];
-          const percent = ((value / maxBin) * 100).toFixed(1);
+          const percent = totalCount > 0 ? ((value / totalCount) * 100).toFixed(1) : '0.0';
           const tooltipText = `${label}: ${value}× (${percent}%)`;
 
           ctx.save();
