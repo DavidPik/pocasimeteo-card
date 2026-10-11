@@ -25,49 +25,85 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Prepare version variables
-        id: vars
+      - name: Validate release version and sync manifests
+        id: version
+        env:
+          VERSION: ${{ inputs.oznaceni_verze }}
         run: |
-          VERSION="${{ github.event.inputs.oznaceni_verze }}"
-          TAG="v${VERSION}"
-          NAME="Počasí Meteo Card – ${VERSION}"
+          set -euo pipefail
 
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "name=${NAME}" >> $GITHUB_OUTPUT
+          if [[ "${GITHUB_REF_NAME}" != "master" ]]; then
+            echo "::error::Run the release workflow from master."
+            exit 1
+          fi
 
-      - name: Sync version to package.json
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must use the numeric MAJOR.MINOR.PATCH format."
+            exit 1
+          fi
+
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
+
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+            const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+            if (pkg.version !== process.env.VERSION || lock.version !== pkg.version || lock.packages[""].version !== pkg.version) {
+              throw new Error("Version synchronization failed across package manifests");
+            }
+          '
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "name=Počasí Meteo Card – ${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build and verify bundle
         run: |
-          jq ".version = \"${{ steps.vars.outputs.version }}\"" package.json > package.tmp.json
-          mv package.tmp.json package.json
+          set -euo pipefail
+          npm run build
+          test -s dist/pocasimeteo-card.js
 
-      - name: Commit updated package.json
+          node --input-type=module -e '
+            import { readFileSync, statSync, writeFileSync } from "node:fs";
+            const bundlePath = "dist/pocasimeteo-card.js";
+            if (statSync(bundlePath).size < 100_000) {
+              throw new Error("Rollup output is unexpectedly small; expected a bundled frontend asset");
+            }
+
+            const hacsPath = "hacs.json";
+            const hacs = JSON.parse(readFileSync(hacsPath, "utf8"));
+            hacs.filename = bundlePath;
+            writeFileSync(hacsPath, JSON.stringify(hacs, null, 2) + "\n");
+          '
+
+      - name: Commit release manifests and bundle
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add package.json
-          git commit -m "Update version to ${{ steps.vars.outputs.tag }}" || echo "No changes to commit"
-          git push || echo "No changes to push"
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json hacs.json dist/pocasimeteo-card.js
 
-      - name: Download Chart.js + adapter
-        run: |
-          mkdir -p src/vendor
-          curl -L https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.esm.js -o src/vendor/chart.js
-          curl -L https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.esm.js -o src/vendor/chartjs-adapter-date-fns.js
-
-      - name: Build
-        run: npm run build
+          if git diff --cached --quiet; then
+            echo "Release files already match the requested version and bundle."
+          else
+            git commit -m "Prepare release ${RELEASE_TAG}"
+            git push origin HEAD:master
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.vars.outputs.tag }}
-          name: ${{ steps.vars.outputs.name }}
-          body: ${{ github.event.inputs.release_notes }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: master
+          name: ${{ steps.version.outputs.name }}
+          body: ${{ inputs.release_notes }}
           files: dist/pocasimeteo-card.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

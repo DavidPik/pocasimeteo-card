@@ -6,9 +6,9 @@
     "build": "rollup -c"
   },
   "dependencies": {
-    "chart.js": "^4.4.0",
-    "chartjs-adapter-date-fns": "^3.0.0",
-    "date-fns": "^3.6.0"
+    "chart.js": "4.5.1",
+    "chartjs-adapter-date-fns": "3.0.0",
+    "date-fns": "3.6.0"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.2.3",
